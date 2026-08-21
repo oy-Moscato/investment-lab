@@ -21,6 +21,7 @@ export const companies = sqliteTable(
     ticker: text("ticker").notNull(),
     market: text("market").notNull().default(""),
     country: text("country").notNull().default(""),
+    currency: text("currency").notNull().default("USD"),
     industry: text("industry").notNull().default(""),
     status: text("status").notNull().default("发现"),
     price: real("price").notNull().default(0),
@@ -68,6 +69,9 @@ export const financials = sqliteTable(
     cash: real("cash").notNull().default(0),
     debt: real("debt").notNull().default(0),
     sharesOutstanding: real("shares_outstanding").notNull().default(0),
+    currency: text("currency").notNull().default("USD"),
+    unitScale: integer("unit_scale").notNull().default(1),
+    sourceDocumentId: integer("source_document_id"),
     stockBasedCompensation: real("stock_based_compensation").notNull().default(0),
     dividend: real("dividend").notNull().default(0),
     buyback: real("buyback").notNull().default(0),
@@ -95,6 +99,9 @@ export const transactions = sqliteTable(
     shares: real("shares").notNull(),
     price: real("price").notNull(),
     fees: real("fees").notNull().default(0),
+    currency: text("currency").notNull().default("USD"),
+    fxRateToBase: real("fx_rate_to_base"),
+    reversalOfTransactionId: integer("reversal_of_transaction_id"),
     note: text("note").notNull().default(""),
     ...timestamps,
   },
@@ -301,3 +308,30 @@ export const evidence = sqliteTable(
     assumptionIdx: index("evidence_assumption_idx").on(table.assumptionId),
   }),
 );
+
+export const sourceDocuments = sqliteTable(
+  "source_documents",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    companyId: integer("company_id").notNull(),
+    type: text("type").notNull().default("manual_note"),
+    title: text("title").notNull(),
+    url: text("url").notNull().default(""),
+    filingDate: text("filing_date").notNull().default(""),
+    periodEnd: text("period_end").notNull().default(""),
+    currency: text("currency").notNull().default("USD"),
+    unitScale: integer("unit_scale").notNull().default(1),
+    verified: integer("verified").notNull().default(0),
+    ...timestamps,
+  },
+  (table) => ({
+    companyIdx: index("source_documents_company_idx").on(table.companyId),
+    periodIdx: index("source_documents_period_idx").on(table.companyId, table.periodEnd),
+  }),
+);
+
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});

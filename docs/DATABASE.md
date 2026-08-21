@@ -10,6 +10,7 @@ review is `database/schema.sql`.
 Company (companies)
 ├── Financial rows (financials)
 ├── Transactions (transactions) → derived positions / portfolio metrics
+├── Source documents (source_documents) → financial provenance
 ├── Valuation scenarios (valuations)
 ├── Investment snapshots (investment_snapshots)
 ├── Assumptions (assumptions) → observation history (assumption_observations)
@@ -19,7 +20,8 @@ Company (companies)
 └── Upcoming events (events)
 
 Industry knowledge (industries) and screener templates (screener_templates)
-are standalone collections.
+are standalone collections. `app_settings` stores base currency and
+idempotency markers.
 ```
 
 ## Tables currently present
@@ -27,8 +29,8 @@ are standalone collections.
 | Table | Role | Relationship notes |
 | --- | --- | --- |
 | `companies` | Current company research record | Root entity for most company-linked rows; `is_sample` marks demo companies. |
-| `financials` | One row per company/year | Logical `company_id`; unique index on `(company_id, year)`. |
-| `transactions` | Append-only buy/sell ledger | Logical `company_id`; positions and returns are derived in `app/page.tsx`. |
+| `financials` | One row per company/year | Logical `company_id`; unique index on `(company_id, year)`; reporting currency, unit scale, and optional source document. |
+| `transactions` | Append-only buy/sell ledger | Logical `company_id`; historical currency, optional FX, and reversal reference; positions and returns are derived in `app/page.tsx`. |
 | `tasks` | Research queue | Optional logical `company_id`; supports update and delete actions. |
 | `events` | Long-term events and review dates | Optional logical `company_id`; supports create and completion toggle. |
 | `journal` | Decision journal timeline | Optional logical `company_id`; current API only appends. |
@@ -39,6 +41,8 @@ are standalone collections.
 | `assumptions` | Current status of investment assumptions | Logical `company_id`; mutable status/note fields. |
 | `assumption_observations` | Append-only assumption checks | Logical `assumption_id`; current assumption status is updated alongside each observation. |
 | `evidence` | Claim/evidence/counter-evidence ledger | Logical `company_id`, optional logical `assumption_id`; current API only appends. |
+| `source_documents` | Financial/research provenance metadata | Logical `company_id`; title, URL, filing/period dates, currency, unit scale, and verification flag. |
+| `app_settings` | Small application settings and migration markers | Key/value table; currently includes `base_currency`, `currency_migration_v1`, and `unit_scale_migration_v1`. |
 
 ## Keys and constraints
 
@@ -50,6 +54,10 @@ are standalone collections.
 - The current schema does **not** declare `FOREIGN KEY` constraints. The
   integer relationship columns are application-managed. Deletes therefore do
   not cascade automatically.
+- `investment_snapshots` is append-only from the API. Generic company metadata
+  edits do not create snapshots; explicit review/thesis-change actions do.
+- Currency backfills and sample-only unit/provenance seeding are guarded by
+  `app_settings` markers in `db/index.ts`.
 
 ## Deliberate omissions
 

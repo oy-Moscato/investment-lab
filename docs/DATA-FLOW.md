@@ -24,10 +24,12 @@ the companies table is empty.
 Composer(kind="transaction")
 → action="create_transaction"
 → POST /api/data
-→ db.insert(transactions).values(...).run()
+→ validate company/type/shares/price and available sell balance
+→ db.insert(transactions).values(currency, optional FX, reversal reference, ...).run()
 → refresh
 → portfolioPositions(companies, transactions) derives shares, cost, average cost,
   current value, unrealized return, and realized return in app/page.tsx
+→ mixed or missing FX remains unaggregated instead of becoming a fake base total
 ```
 
 The app does not write a `positions` row. Current prices are manually stored on
@@ -40,10 +42,19 @@ CompanyDetail edit mode
 → save() in CompanyDetail
 → Home.save({ action: "update_company", ...draft })
 → POST /api/data
-→ route loads the current company, latest financial row, and saved valuation scenarios
-→ route INSERTs one investment_snapshots row first
-→ route UPDATEs the mutable companies row
+→ route UPDATEs the mutable companies row only
 → refresh
+
+The generic company metadata path intentionally does not create a snapshot. An
+explicit review/thesis-change form uses:
+
+```text
+MemoryView
+→ action="create_snapshot"
+→ POST /api/data
+→ db.insert(investment_snapshots).values(...).run()
+→ refresh
+```
 ```
 
 The snapshot insert is append-only in the current API. There is no snapshot
@@ -67,9 +78,11 @@ delete action for them.
 
 ```text
 ValuationView DCF form
-→ dcf(form) calculates 5 explicit years + terminal value in the browser
-→ save() sends action="save_valuation" and fairValue
+→ validateDcfInputs() blocks g >= WACC, invalid WACC, or invalid shares
+→ calculateDcf() calculates 5 explicit years + terminal value using ΔNWC
+→ save() sends action="save_valuation" and assumptions
 → POST /api/data
+→ route validates and recalculates the DCF server-side
 → SELECT existing row for (company_id, scenario)
 → UPDATE existing row or INSERT a new row
 → if scenario == "Base", update companies.fair_value
@@ -90,7 +103,19 @@ Transactions table
 → PortfolioView and Dashboard render the derived metrics
 ```
 
-There is no separate portfolio update action and no cash-account table.
+There is no separate portfolio update action and no cash-account table. The
+base currency is persisted through `app_settings` by the portfolio selector;
+FX rates remain manual and optional.
+
+## Financial provenance
+
+```text
+Financials view
+→ reads financial rows plus source_documents from AppData
+→ renders reporting currency + unit scale + source-document title per row
+→ create_source_document (when used) inserts source_documents
+→ optional financialId update links the financial row to that document
+```
 
 ## Assumptions and evidence
 
