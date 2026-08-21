@@ -14,9 +14,10 @@ financial trends, DCF scenarios, portfolio transactions, industry notes,
 decision journals, immutable investment snapshots, assumption tracking, and an
 evidence ledger in one data-driven app.
 
-This is a source snapshot of the deployed first phase, not a redesigned clone.
-The production source was exported from the Sites checkout at commit
-`68880421802db37bd303ed8e5d1f1e0ff29afc74`.
+This is a source snapshot of the real Sites implementation, not a redesigned
+clone. The exported implementation includes the first-round P0 correctness
+changes and second-round audit guards from Sites commit `9904d25` (with the
+first-round baseline at `583d018`).
 
 The existing ChatGPT Sites deployment remains separate and unchanged:
 [Investment Lab (Owner-only)](https://investment-lab.decent-finch-3957.chatgpt.site)
@@ -28,9 +29,11 @@ Implemented in the snapshot:
 - Dashboard with research overview, watchlist-by-status, queue, events, and portfolio shape.
 - Company research with business model, moat/management, thesis, financial trends, and red-flag prompts.
 - D1-backed transactions, derived positions, industry concentration, and transaction history.
+- Server-side transaction validation, historical transaction currency, manual FX, and base-currency safeguards.
 - Five-year demo financial series with trend sparklines and derived metrics.
-- DCF Bear / Base / Bull scenarios, fair value, margin of safety, and relative metrics.
-- Append-only decision journal and immutable investment snapshots.
+- DCF Bear / Base / Bull scenarios, `ΔNWC`, WACC/terminal-growth guards, fair value, margin of safety, and relative metrics.
+- Append-only decision journal and explicit-only immutable investment snapshots.
+- Financial reporting currency, unit scale, source-document title, and demo-only provenance.
 - Assumption Tracker with append-only observations.
 - Evidence Ledger with support/counter evidence and optional source links.
 - Industry Map and 2–5 company comparison.
@@ -111,11 +114,13 @@ Recommended reading order:
 2. `docs/AUDIT-MANIFEST.md`
 3. `docs/ARCHITECTURE.md`
 4. `docs/STORAGE.md`
-5. `database/schema.sql`
-6. `db/schema.ts` and `db/index.ts`
-7. `app/api/data/route.ts`
-8. `app/page.tsx`
-9. `docs/LIMITATIONS.md`
+5. `docs/WORK-IMPLEMENTATION-P0.md`
+6. `database/schema.sql`
+7. `db/schema.ts` and `db/index.ts`
+8. `app/api/data/route.ts`
+9. `lib/finance-logic.js` and `tests/`
+10. `app/page.tsx`
+11. `docs/LIMITATIONS.md`
 
 Start with [`docs/AUDIT-MANIFEST.md`](docs/AUDIT-MANIFEST.md) for a path-level
 map of the product and a current audit checklist.

@@ -8,15 +8,15 @@ deployment:
 <https://investment-lab.decent-finch-3957.chatgpt.site>
 
 This GitHub snapshot does not change its access policy, data, domain, source
-version, or deployment. The production source commit exported here is
-`68880421802db37bd303ed8e5d1f1e0ff29afc74`.
+version, or deployment. The implementation represented here is `9904d25`
+from the private/current Sites checkout.
 
 ## Sites configuration
 
 `.openai/hosting.json` is included because it is part of the actual Sites
-checkout. It declares the D1 binding name and the Site project identifier. It
-contains no token or credential. The public GitHub repository is not connected
-to an automatic production deploy by this task.
+checkout. The public copy keeps the D1 binding name but redacts the Site project
+identifier. The public GitHub repository is not connected to an automatic
+production deploy by this task.
 
 ## Build path
 

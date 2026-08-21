@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS companies (
   ticker TEXT NOT NULL,
   market TEXT NOT NULL DEFAULT '',
   country TEXT NOT NULL DEFAULT '',
+  currency TEXT NOT NULL DEFAULT 'USD',
   industry TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT '发现',
   price REAL NOT NULL DEFAULT 0,
@@ -55,6 +56,9 @@ CREATE TABLE IF NOT EXISTS financials (
   roe REAL NOT NULL DEFAULT 0,
   roa REAL NOT NULL DEFAULT 0,
   roic REAL NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  unit_scale INTEGER NOT NULL DEFAULT 1,
+  source_document_id INTEGER,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -69,6 +73,9 @@ CREATE TABLE IF NOT EXISTS transactions (
   shares REAL NOT NULL,
   price REAL NOT NULL,
   fees REAL NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD',
+  fx_rate_to_base REAL,
+  reversal_of_transaction_id INTEGER,
   note TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -224,3 +231,26 @@ CREATE TABLE IF NOT EXISTS evidence (
 );
 CREATE INDEX IF NOT EXISTS evidence_company_idx ON evidence(company_id);
 CREATE INDEX IF NOT EXISTS evidence_assumption_idx ON evidence(assumption_id);
+
+CREATE TABLE IF NOT EXISTS source_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL,
+  type TEXT NOT NULL DEFAULT 'manual_note',
+  title TEXT NOT NULL,
+  url TEXT NOT NULL DEFAULT '',
+  filing_date TEXT NOT NULL DEFAULT '',
+  period_end TEXT NOT NULL DEFAULT '',
+  currency TEXT NOT NULL DEFAULT 'USD',
+  unit_scale INTEGER NOT NULL DEFAULT 1,
+  verified INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS source_documents_company_idx ON source_documents(company_id);
+CREATE INDEX IF NOT EXISTS source_documents_period_idx ON source_documents(company_id, period_end);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

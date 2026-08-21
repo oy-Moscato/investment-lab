@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { assumptions, assumptionObservations, companies, evidence, financials, industries, investmentSnapshots, journal, tasks, events, valuations } from "./schema";
+import { assumptions, assumptionObservations, companies, evidence, financials, industries, investmentSnapshots, journal, sourceDocuments, tasks, events, valuations } from "./schema";
 import * as schema from "./schema";
 
 export function getDb() {
@@ -44,34 +44,45 @@ const schemaStatements = [
   `CREATE INDEX IF NOT EXISTS evidence_assumption_idx ON evidence(assumption_id)`,
 ];
 
-// DEMO DATA ONLY. These seed rows are illustrative workflow fixtures, not an
-// export of the production D1 database or the user's private portfolio.
+async function ensureColumn(table: string, column: string, definition: string) {
+  const result = await env.DB.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>();
+  if (!(result.results ?? []).some((item) => item.name === column)) {
+    await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+  }
+}
+
+const compatibilityStatements = [
+  `CREATE TABLE IF NOT EXISTS source_documents (id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER NOT NULL, type TEXT NOT NULL DEFAULT 'manual_note', title TEXT NOT NULL, url TEXT NOT NULL DEFAULT '', filing_date TEXT NOT NULL DEFAULT '', period_end TEXT NOT NULL DEFAULT '', currency TEXT NOT NULL DEFAULT 'USD', unit_scale INTEGER NOT NULL DEFAULT 1, verified INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE INDEX IF NOT EXISTS source_documents_company_idx ON source_documents(company_id)`,
+  `CREATE INDEX IF NOT EXISTS source_documents_period_idx ON source_documents(period_end)`,
+  `CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '', updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+];
+
 const sampleCompanies = [
   {
-    name: "NVIDIA", ticker: "NVDA", market: "NASDAQ", country: "美国", industry: "AI / 半导体", status: "深度研究", price: 0, fairValue: 142, conviction: 8, lastResearchDate: "2026-08-18", isSample: 1,
+    name: "NVIDIA", ticker: "NVDA", market: "NASDAQ", country: "美国", currency: "USD", industry: "AI / 半导体", status: "深度研究", price: 0, fairValue: 142, conviction: 8, lastResearchDate: "2026-08-18", isSample: 1,
     businessModel: "以加速计算平台、数据中心系统与软件生态为核心，收入来自芯片、系统和持续的软件开发者生态。\n\n内置研究模板示例：价格与财务数据需要替换为自己的原始资料。",
     moatScore: 4, moatEvidence: JSON.stringify([{ name: "技术壁垒", score: 5, evidence: "CUDA 生态与软硬件协同" }, { name: "平台生态", score: 5, evidence: "开发者工具链带来迁移成本" }, { name: "规模效应", score: 4, evidence: "研发与供应链规模" }, { name: "定价权", score: 4, evidence: "高性能计算需求旺盛" }]),
     managementName: "Jensen Huang / Colette Kress", managementScore: 4, managementNotes: "观察资本配置、供应约束下的交付兑现与股权激励稀释。",
     thesisBull: "AI 基础设施投资持续，软件生态与系统级产品提高客户锁定，长期现金流质量优于单一芯片周期。", thesisBear: "客户自研芯片、竞争对手追赶或 AI 资本开支回报下降，可能压缩增长与估值。", keyAssumptions: "AI 数据中心需求保持高增长；软件生态继续扩张；毛利率保持在高位。", killCriteria: "连续两年核心市场份额下降；ROIC 长期低于资本成本；关键生态被替代。",
   },
   {
-    name: "Microsoft", ticker: "MSFT", market: "NASDAQ", country: "美国", industry: "软件 / 云计算", status: "等待价格", price: 0, fairValue: 505, conviction: 7, lastResearchDate: "2026-08-14", isSample: 1,
+    name: "Microsoft", ticker: "MSFT", market: "NASDAQ", country: "美国", currency: "USD", industry: "软件 / 云计算", status: "等待价格", price: 0, fairValue: 505, conviction: 7, lastResearchDate: "2026-08-14", isSample: 1,
     businessModel: "通过生产力软件、云服务、企业平台与开发者工具获得订阅和消费型收入。", moatScore: 5, moatEvidence: JSON.stringify([{ name: "迁移成本", score: 5, evidence: "企业工作流与身份系统深度嵌入" }, { name: "规模效应", score: 5, evidence: "全球云基础设施与销售网络" }, { name: "平台生态", score: 4, evidence: "Azure、GitHub、Office 协同" }]),
     managementName: "Satya Nadella / Amy Hood", managementScore: 4, managementNotes: "重点跟踪云业务资本开支回报与 AI 产品的增量收入。", thesisBull: "企业软件、云基础设施与 AI 助手形成交叉销售，现金流复投资能力强。", thesisBear: "AI 基础设施投入过重、云竞争加剧，或监管限制平台协同。", keyAssumptions: "Azure 增长保持；AI 产品能够带来可量化的付费增量；资本回报稳定。", killCriteria: "云业务连续多个周期增速显著低于预期且利润率恶化；核心产品被替代。",
   },
   {
-    name: "ASML", ticker: "ASML", market: "NASDAQ", country: "荷兰", industry: "AI / 半导体", status: "正在研究", price: 0, fairValue: 1110, conviction: 6, lastResearchDate: "2026-08-11", isSample: 1,
+    name: "ASML", ticker: "ASML", market: "NASDAQ", country: "荷兰", currency: "EUR", industry: "AI / 半导体", status: "正在研究", price: 0, fairValue: 1110, conviction: 6, lastResearchDate: "2026-08-11", isSample: 1,
     businessModel: "提供先进光刻设备、服务与升级，客户集中于晶圆制造商，收入具有设备周期性。", moatScore: 5, moatEvidence: JSON.stringify([{ name: "技术壁垒", score: 5, evidence: "极高复杂度的系统集成与供应链" }, { name: "供应链", score: 5, evidence: "关键部件协同与长期验证" }, { name: "牌照 / 监管", score: 3, evidence: "出口管制是机会也是约束" }]),
     managementName: "Christophe Fouquet / Roger Dassen", managementScore: 4, managementNotes: "需要同时理解订单周期、客户资本开支与出口限制。", thesisBull: "先进制程持续提升设备价值，服务收入与技术复杂度构成长期壁垒。", thesisBear: "客户资本开支周期、地缘政治与出口管制造成订单波动。", keyAssumptions: "先进制程需求持续；服务收入扩大；供应链不出现结构性断裂。", killCriteria: "技术路线发生根本改变；客户集中度风险恶化且新增订单持续萎缩。",
   },
   {
-    name: "BYD", ticker: "1211.HK", market: "港股", country: "中国", industry: "汽车 / 新能源", status: "初步筛选", price: 0, fairValue: 390, conviction: 5, lastResearchDate: "2026-08-08", isSample: 1,
+    name: "BYD", ticker: "1211.HK", market: "港股", country: "中国", currency: "HKD", industry: "汽车 / 新能源", status: "初步筛选", price: 0, fairValue: 390, conviction: 5, lastResearchDate: "2026-08-08", isSample: 1,
     businessModel: "覆盖新能源汽车、动力电池与零部件，规模制造与供应链垂直协同是重要变量。", moatScore: 4, moatEvidence: JSON.stringify([{ name: "规模效应", score: 5, evidence: "车型、产能与供应链规模" }, { name: "成本优势", score: 4, evidence: "电池与零部件协同" }, { name: "品牌", score: 3, evidence: "品牌矩阵仍需持续验证" }]),
     managementName: "王传福 / 李柯", managementScore: 4, managementNotes: "重点核对海外市场盈利、渠道效率与价格竞争。", thesisBull: "电动化渗透、垂直整合和海外扩张带来规模与成本优势。", thesisBear: "价格战、海外政策与产能利用率下降压缩回报。", keyAssumptions: "海外销量增长；电池成本曲线延续；价格竞争可控。", killCriteria: "海外业务长期亏损；市场份额连续下降；资本回报跌破资本成本。",
   },
 ];
 
-// DEMO DATA ONLY. Replace with primary-source financial statements before use.
 const sampleFinancials: Record<string, number[][]> = {
   NVDA: [[2022, 26914, 17475, 5600, 4368, 1.74, 9108, 976, 8132, 19300, 11000, 2500, 120, 0, 400, 14, 9, 17], [2023, 26974, 15633, 4400, 4355, 1.76, 5641, 1833, 3808, 15900, 11100, 2500, 110, 0, 500, 13, 8, 15], [2024, 60922, 46729, 32972, 29760, 12.05, 28090, 1067, 27023, 25900, 22000, 2500, 180, 0, 0, 75, 45, 70], [2025, 130497, 101467, 81453, 72880, 2.94, 64000, 5367, 58633, 43800, 29000, 2440, 300, 0, 0, 115, 72, 105], [2026, 165000, 127000, 100000, 90000, 3.65, 82000, 7000, 75000, 55000, 36000, 2400, 450, 0, 0, 118, 74, 108]],
   MSFT: [[2022, 198270, 135620, 83383, 72738, 9.65, 89035, 23825, 65210, 104757, 61270, 7540, 7540, 0, 10740, 48, 19, 29], [2023, 211915, 146052, 88523, 72361, 9.68, 87582, 28107, 59475, 111256, 59900, 7440, 8000, 0, 13000, 38, 17, 26], [2024, 245122, 168088, 109433, 88136, 11.8, 118548, 44477, 74071, 79566, 78800, 7430, 9600, 0, 15000, 37, 18, 28], [2025, 275000, 190000, 125000, 102000, 13.7, 130000, 50000, 80000, 90000, 90000, 7350, 10500, 0, 16000, 39, 19, 29], [2026, 315000, 218000, 145000, 118000, 15.9, 151000, 57000, 94000, 105000, 100000, 7300, 12000, 0, 17000, 40, 20, 30]],
@@ -87,6 +98,14 @@ function financialValues(values: number[]) {
 export async function ensureDatabase() {
   if (!env.DB) throw new Error("Cloudflare D1 binding `DB` is unavailable.");
   await env.DB.batch(schemaStatements.map((statement) => env.DB.prepare(statement)));
+  await env.DB.batch(compatibilityStatements.map((statement) => env.DB.prepare(statement)));
+  await ensureColumn("companies", "currency", "TEXT NOT NULL DEFAULT 'USD'");
+  await ensureColumn("financials", "currency", "TEXT NOT NULL DEFAULT 'USD'");
+  await ensureColumn("financials", "unit_scale", "INTEGER NOT NULL DEFAULT 1");
+  await ensureColumn("financials", "source_document_id", "INTEGER");
+  await ensureColumn("transactions", "currency", "TEXT NOT NULL DEFAULT 'USD'");
+  await ensureColumn("transactions", "fx_rate_to_base", "REAL");
+  await ensureColumn("transactions", "reversal_of_transaction_id", "INTEGER");
   const snapshotColumns = await env.DB.prepare("PRAGMA table_info(investment_snapshots)").all<{ name: string }>();
   const existingSnapshotColumns = new Set((snapshotColumns.results ?? []).map((column) => column.name));
   const missingSnapshotColumns = [
@@ -100,11 +119,33 @@ export async function ensureDatabase() {
   const db = getDb();
   const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM companies").first<{ count: number }>();
   if (Number(count?.count ?? 0) === 0) await db.insert(companies).values(sampleCompanies).run();
-  const companyRows = await db.select({ id: companies.id, ticker: companies.ticker }).from(companies);
+  const currencyMigration = await env.DB.prepare("SELECT value FROM app_settings WHERE key = 'currency_migration_v1'").first<{ value: string }>();
+  if (!currencyMigration) await env.DB.batch([
+    env.DB.prepare("UPDATE companies SET currency = 'USD' WHERE is_sample = 1 AND ticker IN ('NVDA', 'MSFT')"),
+    env.DB.prepare("UPDATE companies SET currency = 'EUR' WHERE is_sample = 1 AND ticker = 'ASML'"),
+    env.DB.prepare("UPDATE companies SET currency = 'HKD' WHERE is_sample = 1 AND ticker = '1211.HK'"),
+    env.DB.prepare("UPDATE financials SET currency = (SELECT currency FROM companies WHERE companies.id = financials.company_id) WHERE company_id IS NOT NULL"),
+    env.DB.prepare("UPDATE transactions SET currency = (SELECT currency FROM companies WHERE companies.id = transactions.company_id) WHERE company_id IS NOT NULL"),
+    env.DB.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('currency_migration_v1', '1')"),
+  ]);
+  await env.DB.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('base_currency', 'USD')").run();
+  const companyRows = await db.select({ id: companies.id, ticker: companies.ticker, currency: companies.currency, isSample: companies.isSample }).from(companies);
   const companyByTicker = new Map(companyRows.map((row) => [row.ticker, row.id]));
-  const financialRows = Object.entries(sampleFinancials).flatMap(([ticker, rows]) => rows.map((row) => ({ companyId: companyByTicker.get(ticker)!, ...financialValues(row) })));
+  const unitScaleMigration = await env.DB.prepare("SELECT value FROM app_settings WHERE key = 'unit_scale_migration_v1'").first<{ value: string }>();
+  if (!unitScaleMigration) await env.DB.batch([
+    env.DB.prepare("UPDATE financials SET unit_scale = 1000000 WHERE company_id IN (SELECT id FROM companies WHERE is_sample = 1)"),
+    env.DB.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('unit_scale_migration_v1', '1')"),
+  ]);
+  const financialRows = Object.entries(sampleFinancials).flatMap(([ticker, rows]) => rows.map((row) => ({ companyId: companyByTicker.get(ticker)!, currency: companyRows.find((company) => company.ticker === ticker)?.currency ?? "USD", unitScale: 1_000_000, ...financialValues(row) })));
   const financialCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM financials").first<{ count: number }>();
   if (Number(financialCount?.count ?? 0) === 0) for (const row of financialRows) await db.insert(financials).values(row).run();
+  const sourceDocumentCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM source_documents").first<{ count: number }>();
+  if (Number(sourceDocumentCount?.count ?? 0) === 0) {
+    for (const company of companyRows.filter((row) => row.isSample === 1 && ["NVDA", "MSFT", "ASML", "1211.HK"].includes(row.ticker))) {
+      await db.insert(sourceDocuments).values({ companyId: company.id, type: "demo_annual_report", title: `${company.ticker} FY2025 Annual Report (DEMO DATA)`, url: "", filingDate: "2026-02-01", periodEnd: "2025-12-31", currency: company.currency, unitScale: 1_000_000, verified: 0 }).run();
+      await env.DB.prepare("UPDATE financials SET source_document_id = (SELECT id FROM source_documents WHERE company_id = financials.company_id AND period_end = '2025-12-31' ORDER BY id DESC LIMIT 1) WHERE company_id = ? AND year = 2025").bind(company.id).run();
+    }
+  }
 
   const taskCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM tasks").first<{ count: number }>();
   if (Number(taskCount?.count ?? 0) === 0) await db.insert(tasks).values([
@@ -134,13 +175,23 @@ export async function ensureDatabase() {
   ]).run();
   const valuationCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM valuations").first<{ count: number }>();
   if (Number(valuationCount?.count ?? 0) === 0) {
-    const valuationRows = Array.from(companyByTicker.values()).flatMap((companyId) => [
-      { companyId, scenario: "Bear", revenueGrowth: 0.06, operatingMargin: 0.18, taxRate: 0.22, capexPct: 0.1, daPct: 0.03, workingCapitalPct: 0.03, wacc: 0.11, terminalGrowth: 0.02, shares: 1, fairValue: 0 },
-      { companyId, scenario: "Base", revenueGrowth: 0.12, operatingMargin: 0.24, taxRate: 0.2, capexPct: 0.08, daPct: 0.03, workingCapitalPct: 0.02, wacc: 0.09, terminalGrowth: 0.03, shares: 1, fairValue: 0 },
-      { companyId, scenario: "Bull", revenueGrowth: 0.2, operatingMargin: 0.3, taxRate: 0.2, capexPct: 0.07, daPct: 0.04, workingCapitalPct: 0.015, wacc: 0.085, terminalGrowth: 0.035, shares: 1, fairValue: 0 },
-    ]);
+    const latestSharesByCompany = new Map<number, { year: number; shares: number }>();
+    for (const row of financialRows) {
+      if (!row.companyId || !Number.isFinite(row.sharesOutstanding)) continue;
+      const previous = latestSharesByCompany.get(row.companyId);
+      if (!previous || row.year > previous.year) latestSharesByCompany.set(row.companyId, { year: row.year, shares: row.sharesOutstanding });
+    }
+    const valuationRows = Array.from(companyByTicker.values()).flatMap((companyId) => {
+      const shares = latestSharesByCompany.get(companyId)?.shares ?? 0;
+      return [
+        { companyId, scenario: "Bear", revenueGrowth: 0.06, operatingMargin: 0.18, taxRate: 0.22, capexPct: 0.1, daPct: 0.03, workingCapitalPct: 0.03, wacc: 0.11, terminalGrowth: 0.02, shares, fairValue: 0 },
+        { companyId, scenario: "Base", revenueGrowth: 0.12, operatingMargin: 0.24, taxRate: 0.2, capexPct: 0.08, daPct: 0.03, workingCapitalPct: 0.02, wacc: 0.09, terminalGrowth: 0.03, shares, fairValue: 0 },
+        { companyId, scenario: "Bull", revenueGrowth: 0.2, operatingMargin: 0.3, taxRate: 0.2, capexPct: 0.07, daPct: 0.04, workingCapitalPct: 0.015, wacc: 0.085, terminalGrowth: 0.035, shares, fairValue: 0 },
+      ];
+    });
     for (const row of valuationRows) await db.insert(valuations).values(row).run();
   }
+  await env.DB.prepare("UPDATE valuations SET shares = (SELECT f.shares_outstanding FROM financials f WHERE f.company_id = valuations.company_id ORDER BY f.year DESC LIMIT 1) WHERE shares <= 1 AND company_id IN (SELECT id FROM companies WHERE is_sample = 1)").run();
 
   const snapshotCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM investment_snapshots").first<{ count: number }>();
   if (Number(snapshotCount?.count ?? 0) === 0) {

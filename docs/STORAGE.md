@@ -21,9 +21,11 @@ The browser calls `/api/data` from `app/page.tsx`:
 
 - `GET` returns companies, financials, transactions, tasks, events, journal
   entries, industries, valuations, screener templates, snapshots, assumptions,
-  assumption observations, and evidence.
+  assumption observations, evidence, source documents, and the base-currency
+  setting.
 - `POST` sends an `action` plus payload. `app/api/data/route.ts` validates basic
-  strings/numbers and writes through Drizzle.
+  strings/numbers, validates transaction/DCF invariants, and writes through
+  Drizzle.
 - The page refreshes the complete `AppData` payload after a successful write.
 
 ## Initialization behavior
@@ -31,8 +33,12 @@ The browser calls `/api/data` from `app/page.tsx`:
 `ensureDatabase()` runs at the beginning of both API handlers. It:
 
 1. Executes `CREATE TABLE IF NOT EXISTS` and index statements.
-2. Adds the five snapshot metric columns when upgrading an older snapshot table.
-3. Seeds demo rows only when the relevant table is empty.
+2. Creates `source_documents` and `app_settings` when absent.
+3. Adds currency, unit-scale, provenance, FX, reversal, and snapshot metric
+   columns when upgrading an older table.
+4. Performs one-time currency/unit backfills using idempotency markers.
+5. Seeds demo rows only when the relevant table is empty; demo source documents
+   are restricted to `is_sample=1` companies.
 
 This means a newly created D1 database is not empty after the first request. The
 seed constants are deliberately marked `DEMO DATA` in `db/index.ts` and are not

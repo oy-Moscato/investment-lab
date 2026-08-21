@@ -1,5 +1,6 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
+import { calculateAvailableShares, calculateDcf, validateDcfInputs, validateTransaction } from "../../../lib/finance-logic.js";
 import {
   assumptions,
   assumptionObservations,
@@ -14,6 +15,8 @@ import {
   tasks,
   transactions,
   valuations,
+  appSettings,
+  sourceDocuments,
 } from "../../../db/schema";
 
 function textValue(value: unknown, fallback = "") {
@@ -34,11 +37,24 @@ function nullableId(value: unknown) {
   return id > 0 ? id : null;
 }
 
+const supportedCurrencies = new Set(["USD", "HKD", "CNY", "EUR", "JPY", "GBP"]);
+const supportedScenarios = new Set(["Bear", "Base", "Bull"]);
+
+function currencyValue(value: unknown, fallback = "USD") {
+  const currency = textValue(value, fallback).toUpperCase();
+  return supportedCurrencies.has(currency) ? currency : fallback;
+}
+
+function nullableNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
 export async function GET() {
   try {
     await ensureDatabase();
     const db = getDb();
-    const [companyRows, financialRows, transactionRows, taskRows, eventRows, journalRows, industryRows, valuationRows, templateRows, snapshotRows, assumptionRows, observationRows, evidenceRows] = await Promise.all([
+    const [companyRows, financialRows, transactionRows, taskRows, eventRows, journalRows, industryRows, valuationRows, templateRows, snapshotRows, assumptionRows, observationRows, evidenceRows, sourceDocumentRows, settingRows] = await Promise.all([
       db.select().from(companies).orderBy(asc(companies.name)),
       db.select().from(financials).orderBy(asc(financials.companyId), asc(financials.year)),
       db.select().from(transactions).orderBy(desc(transactions.tradeDate), desc(transactions.id)),
@@ -52,8 +68,11 @@ export async function GET() {
       db.select().from(assumptions).orderBy(asc(assumptions.companyId), asc(assumptions.id)),
       db.select().from(assumptionObservations).orderBy(desc(assumptionObservations.observedDate), desc(assumptionObservations.id)),
       db.select().from(evidence).orderBy(desc(evidence.sourceDate), desc(evidence.id)),
+      db.select().from(sourceDocuments).orderBy(desc(sourceDocuments.periodEnd), desc(sourceDocuments.id)),
+      db.select().from(appSettings).orderBy(asc(appSettings.key)),
     ]);
-    return Response.json({ companies: companyRows, financials: financialRows, transactions: transactionRows, tasks: taskRows, events: eventRows, journal: journalRows, industries: industryRows, valuations: valuationRows, templates: templateRows, snapshots: snapshotRows, assumptions: assumptionRows, observations: observationRows, evidence: evidenceRows });
+    const baseCurrency = settingRows.find((row) => row.key === "base_currency")?.value ?? "USD";
+    return Response.json({ companies: companyRows, financials: financialRows, transactions: transactionRows, tasks: taskRows, events: eventRows, journal: journalRows, industries: industryRows, valuations: valuationRows, templates: templateRows, snapshots: snapshotRows, assumptions: assumptionRows, observations: observationRows, evidence: evidenceRows, sourceDocuments: sourceDocumentRows, settings: { baseCurrency: currencyValue(baseCurrency) } });
   } catch (error) {
     const message = error instanceof Error ? error.message : "数据加载失败";
     return Response.json({ error: message }, { status: 500 });
@@ -72,43 +91,15 @@ export async function POST(request: Request) {
       const ticker = textValue(payload.ticker).toUpperCase();
       if (!name || !ticker) return Response.json({ error: "公司名称和股票代码不能为空" }, { status: 400 });
       await db.insert(companies).values({
-        name, ticker, market: textValue(payload.market, "未设置"), country: textValue(payload.country, "未设置"), industry: textValue(payload.industry, "未分类"), status: textValue(payload.status, "发现"), price: numberValue(payload.price), fairValue: numberValue(payload.fairValue), conviction: integerValue(payload.conviction), lastResearchDate: textValue(payload.lastResearchDate), businessModel: textValue(payload.businessModel), isSample: 0,
+        name, ticker, market: textValue(payload.market, "未设置"), country: textValue(payload.country, "未设置"), currency: currencyValue(payload.currency), industry: textValue(payload.industry, "未分类"), status: textValue(payload.status, "发现"), price: numberValue(payload.price), fairValue: numberValue(payload.fairValue), conviction: integerValue(payload.conviction), lastResearchDate: textValue(payload.lastResearchDate), businessModel: textValue(payload.businessModel), isSample: 0,
       }).run();
     } else if (action === "update_company") {
       const id = integerValue(payload.id);
       if (!id) return Response.json({ error: "公司 ID 无效" }, { status: 400 });
       const current = await db.select().from(companies).where(eq(companies.id, id)).limit(1);
-      if (current[0]) {
-        const scenarioRows = await db.select().from(valuations).where(eq(valuations.companyId, id));
-        const latestFinancial = await db.select().from(financials).where(eq(financials.companyId, id)).orderBy(desc(financials.year)).limit(1);
-        const financial = latestFinancial[0];
-        const grossMargin = financial?.revenue ? financial.grossProfit / financial.revenue : 0;
-        const fcfMargin = financial?.revenue ? financial.freeCashFlow / financial.revenue : 0;
-        const scenarioValue = (scenario: string) => scenarioRows.find((row) => row.scenario === scenario)?.fairValue ?? 0;
-        await db.insert(investmentSnapshots).values({
-          companyId: id,
-          snapshotType: textValue(payload.snapshotType, "thesis_edit"),
-          snapshotDate: textValue(payload.lastResearchDate, new Date().toISOString().slice(0, 10)),
-          price: numberValue(payload.price),
-          positionWeight: numberValue(payload.positionWeight),
-          conviction: integerValue(payload.conviction),
-          thesisBull: textValue(payload.thesisBull),
-          thesisBear: textValue(payload.thesisBear),
-          keyAssumptions: textValue(payload.keyAssumptions),
-          killCriteria: textValue(payload.killCriteria),
-          fairValueBear: scenarioValue("Bear"),
-          fairValueBase: scenarioValue("Base") || numberValue(payload.fairValue),
-          fairValueBull: scenarioValue("Bull"),
-          nextReviewDate: textValue(payload.nextReviewDate),
-          revenue: financial?.revenue ?? 0,
-          grossMargin,
-          fcfMargin,
-          roic: financial?.roic ?? 0,
-          debt: financial?.debt ?? 0,
-        }).run();
-      }
+      if (!current[0]) return Response.json({ error: "公司不存在" }, { status: 404 });
       await db.update(companies).set({
-        name: textValue(payload.name), ticker: textValue(payload.ticker).toUpperCase(), market: textValue(payload.market), country: textValue(payload.country), industry: textValue(payload.industry), status: textValue(payload.status), price: numberValue(payload.price), marketCap: numberValue(payload.marketCap), enterpriseValue: numberValue(payload.enterpriseValue), fairValue: numberValue(payload.fairValue), conviction: integerValue(payload.conviction), lastResearchDate: textValue(payload.lastResearchDate), businessModel: textValue(payload.businessModel), moatScore: integerValue(payload.moatScore), moatEvidence: textValue(payload.moatEvidence, "[]"), managementName: textValue(payload.managementName), managementScore: integerValue(payload.managementScore), managementNotes: textValue(payload.managementNotes), thesisBull: textValue(payload.thesisBull), thesisBear: textValue(payload.thesisBear), keyAssumptions: textValue(payload.keyAssumptions), killCriteria: textValue(payload.killCriteria), updatedAt: new Date().toISOString(),
+        name: textValue(payload.name), ticker: textValue(payload.ticker).toUpperCase(), market: textValue(payload.market), country: textValue(payload.country), currency: currencyValue(payload.currency, current[0].currency), industry: textValue(payload.industry), status: textValue(payload.status), price: numberValue(payload.price), marketCap: numberValue(payload.marketCap), enterpriseValue: numberValue(payload.enterpriseValue), fairValue: numberValue(payload.fairValue), conviction: integerValue(payload.conviction), lastResearchDate: textValue(payload.lastResearchDate), businessModel: textValue(payload.businessModel), moatScore: integerValue(payload.moatScore), moatEvidence: textValue(payload.moatEvidence, "[]"), managementName: textValue(payload.managementName), managementScore: integerValue(payload.managementScore), managementNotes: textValue(payload.managementNotes), thesisBull: textValue(payload.thesisBull), thesisBear: textValue(payload.thesisBear), keyAssumptions: textValue(payload.keyAssumptions), killCriteria: textValue(payload.killCriteria), updatedAt: new Date().toISOString(),
       }).where(eq(companies.id, id)).run();
     } else if (action === "create_task") {
       const title = textValue(payload.title);
@@ -181,12 +172,30 @@ export async function POST(request: Request) {
       const companyId = integerValue(payload.companyId);
       const shares = numberValue(payload.shares);
       const price = numberValue(payload.price);
-      if (!companyId || shares <= 0 || price < 0) return Response.json({ error: "交易信息不完整" }, { status: 400 });
-      await db.insert(transactions).values({ companyId, tradeDate: textValue(payload.tradeDate, new Date().toISOString().slice(0, 10)), type: textValue(payload.type, "buy"), shares, price, fees: numberValue(payload.fees), note: textValue(payload.note) }).run();
+      const type = textValue(payload.type, "buy").toLowerCase();
+      const company = companyId ? (await db.select().from(companies).where(eq(companies.id, companyId)).limit(1))[0] : undefined;
+      if (!company) return Response.json({ error: "交易关联的公司不存在" }, { status: 400 });
+      if (validateTransaction({ companyExists: true, type, shares, price }).length) return Response.json({ error: "交易类型、股数或价格无效" }, { status: 400 });
+      const ledger = await db.select().from(transactions).where(eq(transactions.companyId, companyId));
+      if (type === "sell") {
+        const availableShares = calculateAvailableShares(ledger, companyId);
+        const validation = validateTransaction({ companyExists: true, type, shares, price, availableShares });
+        if (validation.length) return Response.json({ error: validation.at(-1) }, { status: 400 });
+      }
+      await db.insert(transactions).values({ companyId, tradeDate: textValue(payload.tradeDate, new Date().toISOString().slice(0, 10)), type, shares, price, fees: numberValue(payload.fees), currency: currencyValue(payload.currency, company.currency), fxRateToBase: nullableNumber(payload.fxRateToBase), reversalOfTransactionId: nullableId(payload.reversalOfTransactionId), note: textValue(payload.note) }).run();
     } else if (action === "save_valuation") {
       const companyId = integerValue(payload.companyId);
       const scenario = textValue(payload.scenario, "Base");
-      const values = { companyId, scenario, revenueGrowth: numberValue(payload.revenueGrowth), operatingMargin: numberValue(payload.operatingMargin), taxRate: numberValue(payload.taxRate), capexPct: numberValue(payload.capexPct), daPct: numberValue(payload.daPct), workingCapitalPct: numberValue(payload.workingCapitalPct), wacc: numberValue(payload.wacc), terminalGrowth: numberValue(payload.terminalGrowth), shares: numberValue(payload.shares, 1), fairValue: numberValue(payload.fairValue), updatedAt: new Date().toISOString() };
+      if (!supportedScenarios.has(scenario)) return Response.json({ error: "估值情景无效" }, { status: 400 });
+      const company = (await db.select().from(companies).where(eq(companies.id, companyId)).limit(1))[0];
+      const latestFinancial = (await db.select().from(financials).where(eq(financials.companyId, companyId)).orderBy(desc(financials.year)).limit(1))[0];
+      if (!company) return Response.json({ error: "估值关联的公司不存在" }, { status: 400 });
+      const shares = numberValue(payload.shares, latestFinancial?.sharesOutstanding ?? 0);
+      const values = { companyId, scenario, revenueGrowth: numberValue(payload.revenueGrowth), operatingMargin: numberValue(payload.operatingMargin), taxRate: numberValue(payload.taxRate), capexPct: numberValue(payload.capexPct), daPct: numberValue(payload.daPct), workingCapitalPct: numberValue(payload.workingCapitalPct), wacc: numberValue(payload.wacc), terminalGrowth: numberValue(payload.terminalGrowth), shares, fairValue: 0, updatedAt: new Date().toISOString() };
+      const validation = validateDcfInputs(values);
+      if (validation.length) return Response.json({ error: validation.join("；") }, { status: 400 });
+      const output = calculateDcf({ ...values, latestRevenue: latestFinancial?.revenue ?? 100, latestFcf: latestFinancial?.freeCashFlow ?? 0, netDebt: (latestFinancial?.debt ?? 0) - (latestFinancial?.cash ?? 0) });
+      values.fairValue = output.fairValue;
       const existing = await db.select({ id: valuations.id }).from(valuations).where(and(eq(valuations.companyId, companyId), eq(valuations.scenario, scenario))).limit(1);
       if (existing[0]) await db.update(valuations).set(values).where(eq(valuations.id, existing[0].id)).run();
       else await db.insert(valuations).values(values).run();
@@ -197,6 +206,18 @@ export async function POST(request: Request) {
       await db.insert(industries).values({ name, marketSize: textValue(payload.marketSize), cagr: textValue(payload.cagr), supplyChain: textValue(payload.supplyChain), upstream: textValue(payload.upstream), midstream: textValue(payload.midstream), downstream: textValue(payload.downstream), keyCompanies: textValue(payload.keyCompanies), competition: textValue(payload.competition), techTrends: textValue(payload.techTrends), risks: textValue(payload.risks) }).run();
     } else if (action === "update_industry") {
       await db.update(industries).set({ name: textValue(payload.name), marketSize: textValue(payload.marketSize), cagr: textValue(payload.cagr), supplyChain: textValue(payload.supplyChain), upstream: textValue(payload.upstream), midstream: textValue(payload.midstream), downstream: textValue(payload.downstream), keyCompanies: textValue(payload.keyCompanies), competition: textValue(payload.competition), techTrends: textValue(payload.techTrends), risks: textValue(payload.risks), updatedAt: new Date().toISOString() }).where(eq(industries.id, integerValue(payload.id))).run();
+    } else if (action === "create_source_document") {
+      const companyId = integerValue(payload.companyId);
+      const title = textValue(payload.title);
+      if (!companyId || !title) return Response.json({ error: "来源必须关联公司并填写标题" }, { status: 400 });
+      const company = (await db.select().from(companies).where(eq(companies.id, companyId)).limit(1))[0];
+      if (!company) return Response.json({ error: "来源关联的公司不存在" }, { status: 400 });
+      const document = await db.insert(sourceDocuments).values({ companyId, type: textValue(payload.type, "manual_note"), title, url: textValue(payload.url), filingDate: textValue(payload.filingDate), periodEnd: textValue(payload.periodEnd), currency: currencyValue(payload.currency, company.currency), unitScale: integerValue(payload.unitScale, 1), verified: integerValue(payload.verified) ? 1 : 0 }).returning({ id: sourceDocuments.id }).get();
+      const financialId = integerValue(payload.financialId);
+      if (financialId) await db.update(financials).set({ sourceDocumentId: document?.id ?? null }).where(and(eq(financials.id, financialId), eq(financials.companyId, companyId))).run();
+    } else if (action === "update_settings") {
+      const baseCurrency = currencyValue(payload.baseCurrency);
+      await db.insert(appSettings).values({ key: "base_currency", value: baseCurrency, updatedAt: new Date().toISOString() }).onConflictDoUpdate({ target: appSettings.key, set: { value: baseCurrency, updatedAt: new Date().toISOString() } }).run();
     } else if (action === "save_screener") {
       const name = textValue(payload.name);
       if (!name) return Response.json({ error: "筛选模板名称不能为空" }, { status: 400 });
