@@ -59,3 +59,40 @@ There are no separate `watchlist`, `positions`, `portfolio_accounts`, `cash`,
 `companies.status`; positions are derived from `transactions`; the research
 queue uses `tasks`; memory uses snapshots, assumptions, observations, and
 evidence.
+
+
+## P1 financial provenance additions
+
+# Database Notes: Financial Provenance
+
+## Relationship
+
+```text
+Company
+ ├── Source Documents
+ │    └── Financial Years (many rows may share one source)
+ └── Financial Years
+```
+
+## `source_documents`
+
+- `company_id`: owning company
+- `title`, `source_type`, `source_url`: source identity
+- `filing_date`, `period_start`, `period_end`: temporal coverage
+- `currency`, `unit_scale`: reported presentation metadata
+- `note`: page references, transformations, or audit notes
+- `is_sample`: `1` only for built-in demo data
+
+## `financials` additions
+
+- `period_end`, `filing_date`: the row's own reporting period and filing date
+- `currency`, `unit_scale`: row-level reporting metadata
+- `data_status`: `reported`, `derived`, or `estimate`
+- `source_document_id`: optional application-validated binding
+- `audit_note`: manual provenance or transformation note
+
+The migration is additive. `ensureDatabase()` also performs idempotent column
+compatibility checks for existing D1 databases. SQL foreign keys are deferred;
+the API prevents cross-company source binding and blocks deletion of referenced
+source documents.
+

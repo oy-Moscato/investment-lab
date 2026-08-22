@@ -114,3 +114,38 @@ There is no generic delete route. Transactions, journal entries, snapshots,
 observations, evidence, and companies cannot currently be deleted from the UI.
 Events can be marked complete but not deleted; industries can be edited but not
 deleted.
+
+
+## P1 source and financial provenance
+
+### Add or edit a source document
+
+```text
+SourceDocumentsView in app/source-documents-view.tsx
+→ Home.save() in app/page.tsx
+→ POST /api/data with create_source_document or update_source_document
+→ app/api/data/route.ts validates company and metadata
+→ db.insert/update(sourceDocuments)
+→ refresh GET /api/data
+```
+
+### Backfill or edit a financial year
+
+```text
+Financial editor in SourceDocumentsView
+→ create_financial / update_financial
+→ route validates company-year uniqueness, dataStatus, and source ownership
+→ db.insert/update(financials)
+→ financial row retains period, filing date, currency, unit scale, source id, and audit note
+```
+
+### CSV import
+
+```text
+CSV file or pasted text
+→ parseFinancialCsv in lib/financial-provenance.js
+→ preview rows in SourceDocumentsView
+→ import_financial_csv with mode=insert (default) or mode=upsert (explicit)
+→ existing company-year conflicts return HTTP 409 in insert mode
+→ only upsert mode updates existing rows
+```

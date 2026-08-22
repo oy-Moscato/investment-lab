@@ -38,3 +38,32 @@ This table describes the code that is actually in the snapshot.
 | Investment Memory / AI history search | PARTIAL | Structured memory exists; natural-language search is not implemented. |
 | Portfolio Thesis Exposure / Hidden Correlation | NOT IMPLEMENTED | No thesis-exposure entity or aggregation. |
 | Broker/bank integration | NOT IMPLEMENTED | No external account or trade API integration. |
+
+
+## P1 Issue #3 status
+
+# Investment Lab Features
+
+## Current status
+
+| Feature | Status | Notes |
+| --- | --- | --- |
+| Dashboard | IMPLEMENTED | Research queue, watchlist, portfolio overview |
+| Company research | IMPLEMENTED | Business model, moat, management, thesis |
+| Investment memory | IMPLEMENTED | Snapshots, assumptions, evidence ledger |
+| Financial trends | IMPLEMENTED | Multi-year rows and red-flag prompts |
+| Financial source documents | IMPLEMENTED | CRUD, source metadata, demo provenance |
+| Financial source binding | IMPLEMENTED | One source can bind to multiple years |
+| Historical financial editing | IMPLEMENTED | Manual create, update, delete, bind/unbind |
+| CSV financial import | IMPLEMENTED | Preview; insert by default; explicit upsert |
+| PDF upload / extraction | NOT IMPLEMENTED | URL and notes are supported |
+| Append-only source edit audit | PARTIAL | `updated_at` and audit notes only |
+| Automated market / FX data | NOT IMPLEMENTED | Manual values remain the source of truth |
+
+## Data integrity behavior
+
+- Demo provenance is labeled `DEMO DATA`.
+- Real financial rows are not assigned synthetic documents.
+- A bound source cannot be deleted until its financial references are removed.
+- CSV conflicts are rejected unless the user explicitly selects update mode.
+

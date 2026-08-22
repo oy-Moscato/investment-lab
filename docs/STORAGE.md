@@ -58,3 +58,10 @@ authorization would need to be added before using private records.
 preview. This is useful for rendering and development, but it is not the
 production D1 database. Local generated state belongs under ignored runtime
 directories and must not be committed.
+
+
+## P1 provenance persistence
+
+Financial provenance is stored in D1, not browser storage. The `source_documents` table stores document-level identity and coverage; each `financials` row stores its own `period_end`, `filing_date`, `currency`, `unit_scale`, `data_status`, optional `source_document_id`, and `audit_note`.
+
+The local/Preview migration is additive. Existing non-sample financial rows are not assigned synthetic sources. Built-in sample rows are explicitly marked `DEMO DATA` and receive seeded demo provenance only.

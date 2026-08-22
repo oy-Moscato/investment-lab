@@ -20,6 +20,7 @@ export const companies = sqliteTable(
     name: text("name").notNull(),
     ticker: text("ticker").notNull(),
     market: text("market").notNull().default(""),
+    currency: text("currency").notNull().default("USD"),
     country: text("country").notNull().default(""),
     industry: text("industry").notNull().default(""),
     status: text("status").notNull().default("发现"),
@@ -74,6 +75,13 @@ export const financials = sqliteTable(
     roe: real("roe").notNull().default(0),
     roa: real("roa").notNull().default(0),
     roic: real("roic").notNull().default(0),
+    periodEnd: text("period_end").notNull().default(""),
+    filingDate: text("filing_date").notNull().default(""),
+    currency: text("currency").notNull().default(""),
+    unitScale: text("unit_scale").notNull().default("units"),
+    dataStatus: text("data_status").notNull().default("reported"),
+    sourceDocumentId: integer("source_document_id"),
+    auditNote: text("audit_note").notNull().default(""),
     ...timestamps,
   },
   (table) => ({
@@ -82,6 +90,32 @@ export const financials = sqliteTable(
       table.year,
     ),
     companyIdx: index("financials_company_idx").on(table.companyId),
+    sourceDocumentIdx: index("financials_source_document_idx").on(table.sourceDocumentId),
+  }),
+);
+
+export const sourceDocuments = sqliteTable(
+  "source_documents",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    companyId: integer("company_id").notNull(),
+    title: text("title").notNull(),
+    sourceType: text("source_type").notNull().default("年报"),
+    sourceUrl: text("source_url").notNull().default(""),
+    filingDate: text("filing_date").notNull().default(""),
+    periodStart: text("period_start").notNull().default(""),
+    periodEnd: text("period_end").notNull().default(""),
+    currency: text("currency").notNull().default("USD"),
+    unitScale: text("unit_scale").notNull().default("millions"),
+    note: text("note").notNull().default(""),
+    isSample: integer("is_sample").notNull().default(0),
+    ...timestamps,
+  },
+  (table) => ({
+    companyDateIdx: index("source_documents_company_date_idx").on(
+      table.companyId,
+      table.filingDate,
+    ),
   }),
 );
 

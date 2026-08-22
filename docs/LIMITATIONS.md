@@ -73,3 +73,26 @@ source rather than proposing a replacement implementation.
   data.
 - No secrets, bearer tokens, cookies, password material, or private keys.
 - No new production changes were made as part of this export.
+
+
+## P1 Issue #3 boundaries
+
+# Current Limitations
+
+This file describes known boundaries of the current Investment Lab Sites
+implementation. It is not a substitute for the Roadmap Issues.
+
+- Financial sources are represented by metadata, URLs, and notes; the app does
+  not yet upload or extract PDF content.
+- Source edits update the current document row. A full append-only audit trail
+  for source edits is not implemented yet.
+- CSV import is structured-data import. It does not automatically detect
+  currency, unit scale, fiscal calendars, or accounting restatements.
+- The CSV importer accepts a company ticker or company ID; ambiguous tickers are
+  not an external-market lookup.
+- Source and financial record integrity is enforced in application code while
+  SQL foreign keys remain deferred.
+- The current Site is owner/private and the data route is not a multi-user,
+  row-scoped backend.
+- No production checkpoint or deployment was performed for this work.
+

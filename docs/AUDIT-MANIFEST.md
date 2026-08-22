@@ -159,3 +159,26 @@ version and does not change the existing Site.
 10. docs/FEATURES.md
 11. docs/LIMITATIONS.md
 ```
+
+
+## P1 source-workflow overlay
+
+- Implementation commit: `db197e0 feat: add financial source workflow`
+- New UI: `app/source-documents-view.tsx`
+- New parser: `lib/financial-provenance.js`
+- New migration: `drizzle/0003_secret_mister_fear.sql`
+- New contract test: `tests/source-workflow.test.mjs`
+- Working Sites branch: `work/p1-source-workflow`
+- Public audit branch: `work/p1-source-workflow-audit`
+- Production checkpoint/deployment: not performed
+
+Recommended P1 reading order:
+
+```text
+1. docs/WORK-IMPLEMENTATION-P1-3.md
+2. app/source-documents-view.tsx
+3. lib/financial-provenance.js
+4. app/api/data/route.ts (source/financial action branches)
+5. db/schema.ts and drizzle/0003_secret_mister_fear.sql
+6. tests/source-workflow.test.mjs
+```
