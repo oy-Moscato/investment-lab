@@ -14,9 +14,9 @@ This table describes the code that is actually in the snapshot.
 | Business Model | IMPLEMENTED | Stored on `companies.business_model` and edited in CompanyDetail. |
 | Moat scoring/evidence | IMPLEMENTED | 15 moat categories, 0–5 scores, and JSON text evidence in `moat_evidence`. |
 | Management research | IMPLEMENTED | Name, notes, and 0–5 score on `companies`. |
-| Financial trend view | PARTIAL | Five-year demo rows and sparklines are present; no financial-input UI or import pipeline. |
+| Financial trend view | IMPLEMENTED | Multi-year trends plus manual financial/source editing and CSV preview/import are present; source PDFs are not extracted. |
 | Financial red flags | PARTIAL | Revenue/FCF, net income/OCF, gross margin, debt, dilution, SBC, and ROIC prompts are implemented; not every requested rule exists. |
-| DCF valuation | PARTIAL | Real five-year + terminal calculation and Bear/Base/Bull persistence; no sensitivity matrix and no source-data ingestion. |
+| DCF valuation | PARTIAL | Real five-year + terminal calculation, Bear/Base/Bull persistence, and source-data workflow; no sensitivity matrix. |
 | Relative valuation | PARTIAL | PE, EV/operating income, FCF yield, and PEG are rendered; PB, PS, Forward PE, and separate EV/EBIT fields are not implemented. |
 | Investment Thesis | IMPLEMENTED | Bull, Bear, Key Assumptions, and Kill Criteria fields are editable. |
 | Why I Own These | IMPLEMENTED | Represented by thesis fields and snapshot `Why I Own It` content; no separate table. |

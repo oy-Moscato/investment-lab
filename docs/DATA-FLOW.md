@@ -102,19 +102,26 @@ summary stays convenient.
 
 ## Delete behavior
 
-The only real delete action is:
+The API has action-specific deletes rather than a generic delete route.
 
 ```text
 QueueView more button
 → action="delete_task"
 → db.delete(tasks).where(eq(tasks.id, id)).run()
+
+SourceDocumentsView
+→ delete_source_document
+→ route blocks deletion while financial rows reference the source
+→ db.delete(sourceDocuments)
+
+SourceDocumentsView
+→ delete_financial
+→ db.delete(financials)
 ```
 
-There is no generic delete route. Transactions, journal entries, snapshots,
-observations, evidence, and companies cannot currently be deleted from the UI.
-Events can be marked complete but not deleted; industries can be edited but not
-deleted.
-
+Transactions, journal entries, snapshots, observations, evidence, companies,
+events, industries, and valuations do not currently have complete delete
+workflows.
 
 ## P1 source and financial provenance
 

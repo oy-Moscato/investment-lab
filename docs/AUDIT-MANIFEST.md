@@ -106,8 +106,8 @@ All are currently in `app/page.tsx`:
 See `docs/LIMITATIONS.md`. Highlights:
 
 - no application-level authorization in `/api/data`
-- no external financial data source or import flow
-- partial CRUD and no generic delete
+- no external market-data provider or automatic filing ingestion; structured financial-source and CSV import workflow is implemented
+- partial CRUD outside the source/financial workflow; there is no generic delete dispatcher
 - no cash account, thesis exposure, tags, settings, prediction calibration, or
   natural-language Investment Memory search
 - Dashboard task-check and top-bar search affordances are not wired

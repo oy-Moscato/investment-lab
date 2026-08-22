@@ -22,9 +22,9 @@ source rather than proposing a replacement implementation.
 ## CRUD and data integrity limitations
 
 - The API has one general POST dispatcher rather than typed route modules.
-- Only tasks have a real delete action. Companies, transactions, journal rows,
-  snapshots, observations, evidence, events, industries, and valuations do not
-  have complete edit/delete workflows.
+- Source documents and financial rows have action-specific delete workflows.
+  Companies, transactions, journal rows, snapshots, observations, evidence,
+  events, industries, and valuations do not have complete edit/delete workflows.
 - Journal entries, transactions, snapshots, observations, and evidence are
   append-only in the current API; this is intentional for historical memory but
   there is no correction/reversal workflow.
@@ -62,9 +62,9 @@ source rather than proposing a replacement implementation.
 - `ensureDatabase()` runs schema/bootstrap checks on every API request. This is
   convenient for an early Site but should be separated into a controlled
   migration/seed process as data volume grows.
-- The production source contains the Sites project identifier in
-  `.openai/hosting.json`. It is not a credential, but a future public deploy
-  should use a separate project/database to avoid accidental production writes.
+- The private Sites source uses a project identifier in `.openai/hosting.json`;
+  the public audit branch redacts it. The public branch must not be used to
+  deploy over the existing private Site without an explicit binding decision.
 
 ## Not included in this repository
 
@@ -76,11 +76,6 @@ source rather than proposing a replacement implementation.
 
 
 ## P1 Issue #3 boundaries
-
-# Current Limitations
-
-This file describes known boundaries of the current Investment Lab Sites
-implementation. It is not a substitute for the Roadmap Issues.
 
 - Financial sources are represented by metadata, URLs, and notes; the app does
   not yet upload or extract PDF content.
