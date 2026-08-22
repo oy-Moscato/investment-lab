@@ -102,15 +102,57 @@ summary stays convenient.
 
 ## Delete behavior
 
-The only real delete action is:
+The API has action-specific deletes rather than a generic delete route.
 
 ```text
 QueueView more button
 → action="delete_task"
 → db.delete(tasks).where(eq(tasks.id, id)).run()
+
+SourceDocumentsView
+→ delete_source_document
+→ route blocks deletion while financial rows reference the source
+→ db.delete(sourceDocuments)
+
+SourceDocumentsView
+→ delete_financial
+→ db.delete(financials)
 ```
 
-There is no generic delete route. Transactions, journal entries, snapshots,
-observations, evidence, and companies cannot currently be deleted from the UI.
-Events can be marked complete but not deleted; industries can be edited but not
-deleted.
+Transactions, journal entries, snapshots, observations, evidence, companies,
+events, industries, and valuations do not currently have complete delete
+workflows.
+
+## P1 source and financial provenance
+
+### Add or edit a source document
+
+```text
+SourceDocumentsView in app/source-documents-view.tsx
+→ Home.save() in app/page.tsx
+→ POST /api/data with create_source_document or update_source_document
+→ app/api/data/route.ts validates company and metadata
+→ db.insert/update(sourceDocuments)
+→ refresh GET /api/data
+```
+
+### Backfill or edit a financial year
+
+```text
+Financial editor in SourceDocumentsView
+→ create_financial / update_financial
+→ route validates company-year uniqueness, dataStatus, and source ownership
+→ db.insert/update(financials)
+→ financial row retains period, filing date, currency, unit scale, source id, and audit note
+```
+
+### CSV import
+
+```text
+CSV file or pasted text
+→ parseFinancialCsv in lib/financial-provenance.js
+→ preview rows in SourceDocumentsView
+→ import_financial_csv with mode=insert (default) or mode=upsert (explicit)
+→ existing company-year conflicts return HTTP 409 in insert mode
+→ only upsert mode updates existing rows
+```

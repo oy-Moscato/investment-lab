@@ -106,8 +106,8 @@ All are currently in `app/page.tsx`:
 See `docs/LIMITATIONS.md`. Highlights:
 
 - no application-level authorization in `/api/data`
-- no external financial data source or import flow
-- partial CRUD and no generic delete
+- no external market-data provider or automatic filing ingestion; structured financial-source and CSV import workflow is implemented
+- partial CRUD outside the source/financial workflow; there is no generic delete dispatcher
 - no cash account, thesis exposure, tags, settings, prediction calibration, or
   natural-language Investment Memory search
 - Dashboard task-check and top-bar search affordances are not wired
@@ -158,4 +158,27 @@ version and does not change the existing Site.
 9. app/page.tsx
 10. docs/FEATURES.md
 11. docs/LIMITATIONS.md
+```
+
+
+## P1 source-workflow overlay
+
+- Implementation commit: `db197e0 feat: add financial source workflow`
+- New UI: `app/source-documents-view.tsx`
+- New parser: `lib/financial-provenance.js`
+- New migration: `drizzle/0003_secret_mister_fear.sql`
+- New contract test: `tests/source-workflow.test.mjs`
+- Working Sites branch: `work/p1-source-workflow`
+- Public audit branch: `work/p1-source-workflow-audit`
+- Production checkpoint/deployment: not performed
+
+Recommended P1 reading order:
+
+```text
+1. docs/WORK-IMPLEMENTATION-P1-3.md
+2. app/source-documents-view.tsx
+3. lib/financial-provenance.js
+4. app/api/data/route.ts (source/financial action branches)
+5. db/schema.ts and drizzle/0003_secret_mister_fear.sql
+6. tests/source-workflow.test.mjs
 ```

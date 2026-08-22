@@ -22,9 +22,9 @@ source rather than proposing a replacement implementation.
 ## CRUD and data integrity limitations
 
 - The API has one general POST dispatcher rather than typed route modules.
-- Only tasks have a real delete action. Companies, transactions, journal rows,
-  snapshots, observations, evidence, events, industries, and valuations do not
-  have complete edit/delete workflows.
+- Source documents and financial rows have action-specific delete workflows.
+  Companies, transactions, journal rows, snapshots, observations, evidence,
+  events, industries, and valuations do not have complete edit/delete workflows.
 - Journal entries, transactions, snapshots, observations, and evidence are
   append-only in the current API; this is intentional for historical memory but
   there is no correction/reversal workflow.
@@ -62,9 +62,9 @@ source rather than proposing a replacement implementation.
 - `ensureDatabase()` runs schema/bootstrap checks on every API request. This is
   convenient for an early Site but should be separated into a controlled
   migration/seed process as data volume grows.
-- The production source contains the Sites project identifier in
-  `.openai/hosting.json`. It is not a credential, but a future public deploy
-  should use a separate project/database to avoid accidental production writes.
+- The private Sites source uses a project identifier in `.openai/hosting.json`;
+  the public audit branch redacts it. The public branch must not be used to
+  deploy over the existing private Site without an explicit binding decision.
 
 ## Not included in this repository
 
@@ -73,3 +73,21 @@ source rather than proposing a replacement implementation.
   data.
 - No secrets, bearer tokens, cookies, password material, or private keys.
 - No new production changes were made as part of this export.
+
+
+## P1 Issue #3 boundaries
+
+- Financial sources are represented by metadata, URLs, and notes; the app does
+  not yet upload or extract PDF content.
+- Source edits update the current document row. A full append-only audit trail
+  for source edits is not implemented yet.
+- CSV import is structured-data import. It does not automatically detect
+  currency, unit scale, fiscal calendars, or accounting restatements.
+- The CSV importer accepts a company ticker or company ID; ambiguous tickers are
+  not an external-market lookup.
+- Source and financial record integrity is enforced in application code while
+  SQL foreign keys remain deferred.
+- The current Site is owner/private and the data route is not a multi-user,
+  row-scoped backend.
+- No production checkpoint or deployment was performed for this work.
+

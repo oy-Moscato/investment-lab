@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { assumptions, assumptionObservations, companies, evidence, financials, industries, investmentSnapshots, journal, tasks, events, valuations } from "./schema";
+import { assumptions, assumptionObservations, companies, evidence, financials, industries, investmentSnapshots, journal, sourceDocuments, tasks, events, valuations } from "./schema";
 import * as schema from "./schema";
 
 export function getDb() {
@@ -15,12 +15,14 @@ export function getDb() {
 }
 
 const schemaStatements = [
-  `CREATE TABLE IF NOT EXISTS companies (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, ticker TEXT NOT NULL, market TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT '', industry TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '发现', price REAL NOT NULL DEFAULT 0, market_cap REAL NOT NULL DEFAULT 0, enterprise_value REAL NOT NULL DEFAULT 0, fair_value REAL NOT NULL DEFAULT 0, conviction INTEGER NOT NULL DEFAULT 0, last_research_date TEXT NOT NULL DEFAULT '', business_model TEXT NOT NULL DEFAULT '', moat_score INTEGER NOT NULL DEFAULT 0, moat_evidence TEXT NOT NULL DEFAULT '[]', management_name TEXT NOT NULL DEFAULT '', management_score INTEGER NOT NULL DEFAULT 0, management_notes TEXT NOT NULL DEFAULT '', thesis_bull TEXT NOT NULL DEFAULT '', thesis_bear TEXT NOT NULL DEFAULT '', key_assumptions TEXT NOT NULL DEFAULT '', kill_criteria TEXT NOT NULL DEFAULT '', is_sample INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE IF NOT EXISTS companies (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, ticker TEXT NOT NULL, market TEXT NOT NULL DEFAULT '', currency TEXT NOT NULL DEFAULT 'USD', country TEXT NOT NULL DEFAULT '', industry TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT '发现', price REAL NOT NULL DEFAULT 0, market_cap REAL NOT NULL DEFAULT 0, enterprise_value REAL NOT NULL DEFAULT 0, fair_value REAL NOT NULL DEFAULT 0, conviction INTEGER NOT NULL DEFAULT 0, last_research_date TEXT NOT NULL DEFAULT '', business_model TEXT NOT NULL DEFAULT '', moat_score INTEGER NOT NULL DEFAULT 0, moat_evidence TEXT NOT NULL DEFAULT '[]', management_name TEXT NOT NULL DEFAULT '', management_score INTEGER NOT NULL DEFAULT 0, management_notes TEXT NOT NULL DEFAULT '', thesis_bull TEXT NOT NULL DEFAULT '', thesis_bear TEXT NOT NULL DEFAULT '', key_assumptions TEXT NOT NULL DEFAULT '', kill_criteria TEXT NOT NULL DEFAULT '', is_sample INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS companies_ticker_market_idx ON companies(ticker, market)`,
   `CREATE INDEX IF NOT EXISTS companies_industry_idx ON companies(industry)`,
-  `CREATE TABLE IF NOT EXISTS financials (id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER NOT NULL, year INTEGER NOT NULL, revenue REAL NOT NULL DEFAULT 0, gross_profit REAL NOT NULL DEFAULT 0, operating_income REAL NOT NULL DEFAULT 0, net_income REAL NOT NULL DEFAULT 0, eps REAL NOT NULL DEFAULT 0, operating_cash_flow REAL NOT NULL DEFAULT 0, capex REAL NOT NULL DEFAULT 0, free_cash_flow REAL NOT NULL DEFAULT 0, cash REAL NOT NULL DEFAULT 0, debt REAL NOT NULL DEFAULT 0, shares_outstanding REAL NOT NULL DEFAULT 0, stock_based_compensation REAL NOT NULL DEFAULT 0, dividend REAL NOT NULL DEFAULT 0, buyback REAL NOT NULL DEFAULT 0, roe REAL NOT NULL DEFAULT 0, roa REAL NOT NULL DEFAULT 0, roic REAL NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE TABLE IF NOT EXISTS financials (id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER NOT NULL, year INTEGER NOT NULL, revenue REAL NOT NULL DEFAULT 0, gross_profit REAL NOT NULL DEFAULT 0, operating_income REAL NOT NULL DEFAULT 0, net_income REAL NOT NULL DEFAULT 0, eps REAL NOT NULL DEFAULT 0, operating_cash_flow REAL NOT NULL DEFAULT 0, capex REAL NOT NULL DEFAULT 0, free_cash_flow REAL NOT NULL DEFAULT 0, cash REAL NOT NULL DEFAULT 0, debt REAL NOT NULL DEFAULT 0, shares_outstanding REAL NOT NULL DEFAULT 0, stock_based_compensation REAL NOT NULL DEFAULT 0, dividend REAL NOT NULL DEFAULT 0, buyback REAL NOT NULL DEFAULT 0, roe REAL NOT NULL DEFAULT 0, roa REAL NOT NULL DEFAULT 0, roic REAL NOT NULL DEFAULT 0, period_end TEXT NOT NULL DEFAULT '', filing_date TEXT NOT NULL DEFAULT '', currency TEXT NOT NULL DEFAULT '', unit_scale TEXT NOT NULL DEFAULT 'units', data_status TEXT NOT NULL DEFAULT 'reported', source_document_id INTEGER, audit_note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS financials_company_year_idx ON financials(company_id, year)`,
   `CREATE INDEX IF NOT EXISTS financials_company_idx ON financials(company_id)`,
+  `CREATE TABLE IF NOT EXISTS source_documents (id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER NOT NULL, title TEXT NOT NULL, source_type TEXT NOT NULL DEFAULT '年报', source_url TEXT NOT NULL DEFAULT '', filing_date TEXT NOT NULL DEFAULT '', period_start TEXT NOT NULL DEFAULT '', period_end TEXT NOT NULL DEFAULT '', currency TEXT NOT NULL DEFAULT 'USD', unit_scale TEXT NOT NULL DEFAULT 'millions', note TEXT NOT NULL DEFAULT '', is_sample INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+  `CREATE INDEX IF NOT EXISTS source_documents_company_date_idx ON source_documents(company_id, filing_date)`,
   `CREATE TABLE IF NOT EXISTS transactions (id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER NOT NULL, trade_date TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'buy', shares REAL NOT NULL, price REAL NOT NULL, fees REAL NOT NULL DEFAULT 0, note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
   `CREATE INDEX IF NOT EXISTS transactions_company_date_idx ON transactions(company_id, trade_date)`,
   `CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, company_id INTEGER, title TEXT NOT NULL, priority INTEGER NOT NULL DEFAULT 2, status TEXT NOT NULL DEFAULT '待处理', due_date TEXT NOT NULL DEFAULT '', sort_order INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
@@ -44,8 +46,6 @@ const schemaStatements = [
   `CREATE INDEX IF NOT EXISTS evidence_assumption_idx ON evidence(assumption_id)`,
 ];
 
-// DEMO DATA ONLY. These seed rows are illustrative workflow fixtures, not an
-// export of the production D1 database or the user's private portfolio.
 const sampleCompanies = [
   {
     name: "NVIDIA", ticker: "NVDA", market: "NASDAQ", country: "美国", industry: "AI / 半导体", status: "深度研究", price: 0, fairValue: 142, conviction: 8, lastResearchDate: "2026-08-18", isSample: 1,
@@ -71,7 +71,6 @@ const sampleCompanies = [
   },
 ];
 
-// DEMO DATA ONLY. Replace with primary-source financial statements before use.
 const sampleFinancials: Record<string, number[][]> = {
   NVDA: [[2022, 26914, 17475, 5600, 4368, 1.74, 9108, 976, 8132, 19300, 11000, 2500, 120, 0, 400, 14, 9, 17], [2023, 26974, 15633, 4400, 4355, 1.76, 5641, 1833, 3808, 15900, 11100, 2500, 110, 0, 500, 13, 8, 15], [2024, 60922, 46729, 32972, 29760, 12.05, 28090, 1067, 27023, 25900, 22000, 2500, 180, 0, 0, 75, 45, 70], [2025, 130497, 101467, 81453, 72880, 2.94, 64000, 5367, 58633, 43800, 29000, 2440, 300, 0, 0, 115, 72, 105], [2026, 165000, 127000, 100000, 90000, 3.65, 82000, 7000, 75000, 55000, 36000, 2400, 450, 0, 0, 118, 74, 108]],
   MSFT: [[2022, 198270, 135620, 83383, 72738, 9.65, 89035, 23825, 65210, 104757, 61270, 7540, 7540, 0, 10740, 48, 19, 29], [2023, 211915, 146052, 88523, 72361, 9.68, 87582, 28107, 59475, 111256, 59900, 7440, 8000, 0, 13000, 38, 17, 26], [2024, 245122, 168088, 109433, 88136, 11.8, 118548, 44477, 74071, 79566, 78800, 7430, 9600, 0, 15000, 37, 18, 28], [2025, 275000, 190000, 125000, 102000, 13.7, 130000, 50000, 80000, 90000, 90000, 7350, 10500, 0, 16000, 39, 19, 29], [2026, 315000, 218000, 145000, 118000, 15.9, 151000, 57000, 94000, 105000, 100000, 7300, 12000, 0, 17000, 40, 20, 30]],
@@ -84,9 +83,29 @@ function financialValues(values: number[]) {
   return { year, revenue, grossProfit, operatingIncome, netIncome, eps, operatingCashFlow, capex, freeCashFlow, cash, debt, sharesOutstanding, stockBasedCompensation, dividend, buyback, roe, roa, roic };
 }
 
+async function addMissingColumns(tableName: string, columns: Array<[string, string]>) {
+  const tableInfo = await env.DB.prepare(`PRAGMA table_info(${tableName})`).all<{ name: string }>();
+  const existing = new Set((tableInfo.results ?? []).map((column) => column.name));
+  const statements = columns
+    .filter(([name]) => !existing.has(name))
+    .map(([name, definition]) => env.DB.prepare(`ALTER TABLE ${tableName} ADD COLUMN ${name} ${definition}`));
+  if (statements.length) await env.DB.batch(statements);
+}
+
 export async function ensureDatabase() {
   if (!env.DB) throw new Error("Cloudflare D1 binding `DB` is unavailable.");
   await env.DB.batch(schemaStatements.map((statement) => env.DB.prepare(statement)));
+  await addMissingColumns("companies", [["currency", "TEXT NOT NULL DEFAULT 'USD'"]]);
+  await addMissingColumns("financials", [
+    ["period_end", "TEXT NOT NULL DEFAULT ''"],
+    ["filing_date", "TEXT NOT NULL DEFAULT ''"],
+    ["currency", "TEXT NOT NULL DEFAULT ''"],
+    ["unit_scale", "TEXT NOT NULL DEFAULT 'units'"],
+    ["data_status", "TEXT NOT NULL DEFAULT 'reported'"],
+    ["source_document_id", "INTEGER"],
+    ["audit_note", "TEXT NOT NULL DEFAULT ''"],
+  ]);
+  await env.DB.prepare("CREATE INDEX IF NOT EXISTS financials_source_document_idx ON financials(source_document_id)").run();
   const snapshotColumns = await env.DB.prepare("PRAGMA table_info(investment_snapshots)").all<{ name: string }>();
   const existingSnapshotColumns = new Set((snapshotColumns.results ?? []).map((column) => column.name));
   const missingSnapshotColumns = [
@@ -100,11 +119,48 @@ export async function ensureDatabase() {
   const db = getDb();
   const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM companies").first<{ count: number }>();
   if (Number(count?.count ?? 0) === 0) await db.insert(companies).values(sampleCompanies).run();
-  const companyRows = await db.select({ id: companies.id, ticker: companies.ticker }).from(companies);
+  const companyRows = await db.select({ id: companies.id, ticker: companies.ticker, isSample: companies.isSample }).from(companies);
   const companyByTicker = new Map(companyRows.map((row) => [row.ticker, row.id]));
   const financialRows = Object.entries(sampleFinancials).flatMap(([ticker, rows]) => rows.map((row) => ({ companyId: companyByTicker.get(ticker)!, ...financialValues(row) })));
   const financialCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM financials").first<{ count: number }>();
   if (Number(financialCount?.count ?? 0) === 0) for (const row of financialRows) await db.insert(financials).values(row).run();
+
+  const demoSourceCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM source_documents WHERE is_sample = 1").first<{ count: number }>();
+  const demoCurrencies: Record<string, string> = { NVDA: "USD", MSFT: "USD", ASML: "EUR", "1211.HK": "HKD" };
+  await env.DB.batch(Object.entries(demoCurrencies).map(([ticker, currency]) => env.DB.prepare("UPDATE companies SET currency = ? WHERE ticker = ? AND is_sample = 1 AND (currency = '' OR currency = 'USD')").bind(currency, ticker)));
+  if (Number(demoSourceCount?.count ?? 0) === 0) {
+    for (const sample of sampleCompanies) {
+      const companyId = companyByTicker.get(sample.ticker);
+      if (!companyId) continue;
+      const rows = sampleFinancials[sample.ticker] ?? [];
+      const firstYear = rows[0]?.[0] ?? new Date().getFullYear();
+      const lastYear = rows.at(-1)?.[0] ?? firstYear;
+      await db.insert(sourceDocuments).values({
+        companyId,
+        title: `${sample.ticker} Demo Financial Model ${firstYear}-${lastYear}`,
+        sourceType: "DEMO DATA",
+        filingDate: sample.lastResearchDate,
+        periodStart: `${firstYear}-01-01`,
+        periodEnd: `${lastYear}-12-31`,
+        currency: demoCurrencies[sample.ticker] ?? "USD",
+        unitScale: "millions",
+        note: "DEMO DATA：仅用于展示研究工作流，不是可用于投资决策的原始披露文件。",
+        isSample: 1,
+      }).run();
+    }
+  }
+  const demoSources = await db.select().from(sourceDocuments).where(eq(sourceDocuments.isSample, 1));
+  for (const source of demoSources) {
+    await env.DB.prepare(`UPDATE financials
+      SET source_document_id = ?,
+          period_end = CASE WHEN period_end = '' THEN printf('%04d-12-31', year) ELSE period_end END,
+          filing_date = CASE WHEN filing_date = '' THEN ? ELSE filing_date END,
+          currency = CASE WHEN currency = '' THEN ? ELSE currency END,
+          unit_scale = CASE WHEN unit_scale = '' OR unit_scale = 'units' THEN ? ELSE unit_scale END,
+          data_status = CASE WHEN data_status = 'reported' THEN 'estimate' ELSE data_status END,
+          audit_note = CASE WHEN audit_note = '' THEN 'DEMO DATA：请替换为原始披露数据。' ELSE audit_note END
+      WHERE company_id = ? AND source_document_id IS NULL`).bind(source.id, source.filingDate, source.currency, source.unitScale, source.companyId).run();
+  }
 
   const taskCount = await env.DB.prepare("SELECT COUNT(*) AS count FROM tasks").first<{ count: number }>();
   if (Number(taskCount?.count ?? 0) === 0) await db.insert(tasks).values([

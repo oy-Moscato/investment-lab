@@ -1,132 +1,128 @@
 # Investment Lab
 
-Personal Long-Term Investment Research OS · 长期投资研究工作台
+> This branch is a public, sanitized audit overlay for the P1 financial-source workflow. It contains no private portfolio rows or credentials.
 
-> This repository is a public, sanitized source snapshot intended for
-> development and architectural review. It is not the production database and
-> it does not contain real private portfolio data.
+Personal long-term investment research OS. The current source includes a
+cloud-backed research workspace, investment memory, and a financial source of
+truth workflow for editing, historical backfill, and safe CSV import.
 
-## What this is
+A clean full-stack starter running on
+[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
+Drizzle support.
 
-Investment Lab is the current ChatGPT Sites implementation of a personal,
-long-horizon investment research workspace. It organizes company research,
-financial trends, DCF scenarios, portfolio transactions, industry notes,
-decision journals, immutable investment snapshots, assumption tracking, and an
-evidence ledger in one data-driven app.
+## Prerequisites
 
-This is a source snapshot of the deployed first phase, not a redesigned clone.
-The production source was exported from the Sites checkout at commit
-`68880421802db37bd303ed8e5d1f1e0ff29afc74`.
+- Node.js `>=22.13.0`
+- Linux with `flock`, `curl`, and GNU `timeout`
 
-The existing ChatGPT Sites deployment remains separate and unchanged:
-[Investment Lab (Owner-only)](https://investment-lab.decent-finch-3957.chatgpt.site)
+## Sites Lifecycle
+
+The Sites lifecycle CLI runs the locked dependency install before returning this checkout. Edit the source under `app/`, then checkpoint when a coherent milestone is ready to inspect or share. The remote Sites builder runs `npm run build` against the pushed commit. Do not repeat install or build as a normal pre-checkpoint step.
+
+This starter does not use `wrangler.jsonc`.
+
+`install:ci` is intentionally a single, non-retrying `npm ci`. It refuses a concurrent install for the same project, consumes a matching image-seeded npm cache with `--prefer-offline` while retaining registry fallback for a missing cache object, otherwise downloads and verifies the complete vinext tarball recorded in `package-lock.json`, limits npm to one socket, and terminates a stalled install. `build` applies a short timeout. These helpers target Linux and use GNU `timeout`; they are not native macOS scripts.
+
+Scripts that need writable project-scoped home, npm, XDG, and temporary paths use `scripts/sites-env.sh`. The `dev` and `start` scripts honor the caller's runtime environment and keep Wrangler logs inside the checkout. The generated `.sites-runtime/` directory is disposable and ignored by Git.
 
 ## Current implementation
 
-Implemented in the snapshot:
+- D1-backed company, financial, portfolio, valuation, journal, and research
+  records.
+- Investment snapshots, assumption tracking, and evidence ledger.
+- Source-document CRUD with period, currency, unit-scale, and data-status
+  metadata.
+- Manual financial-year editing and source binding.
+- CSV preview import with insert-by-default conflict protection and explicit
+  upsert mode.
 
-- Dashboard with research overview, watchlist-by-status, queue, events, and portfolio shape.
-- Company research with business model, moat/management, thesis, financial trends, and red-flag prompts.
-- D1-backed transactions, derived positions, industry concentration, and transaction history.
-- Five-year demo financial series with trend sparklines and derived metrics.
-- DCF Bear / Base / Bull scenarios, fair value, margin of safety, and relative metrics.
-- Append-only decision journal and immutable investment snapshots.
-- Assumption Tracker with append-only observations.
-- Evidence Ledger with support/counter evidence and optional source links.
-- Industry Map and 2–5 company comparison.
-- Responsive desktop, tablet, and mobile CSS.
+See [`docs/WORK-IMPLEMENTATION-P1-3.md`](docs/WORK-IMPLEMENTATION-P1-3.md),
+[`docs/DATABASE.md`](docs/DATABASE.md), and
+[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) for the current audit notes.
 
-The exact feature status, including partial and missing areas, is documented in
-[`docs/FEATURES.md`](docs/FEATURES.md).
+## Included Shape
 
-## Technology
+- edit site code under `app/`
+- `app/chatgpt-auth.ts` provides optional dispatch-owned ChatGPT sign-in helpers
+- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
+- `vite.config.ts` simulates declared bindings for local development
+- `db/index.ts` reads the D1 binding from the Cloudflare Worker environment
+- `db/schema.ts` starts intentionally empty
+- `examples/d1/` contains an optional D1 example surface
+- `drizzle.config.ts` supports local migration generation when needed
 
-- React 19 + TypeScript
-- Next-compatible App Router surface compiled by Vinext/Vite
-- Cloudflare Worker runtime
-- Cloudflare D1 for persistent storage
-- Drizzle ORM and Drizzle migrations
-- Plain CSS in `app/globals.css` (no Tailwind utility classes in the product UI)
+## Workspace Auth Headers
 
-## Local development
+OpenAI workspace sites can read the current user's email from
+`oai-authenticated-user-email`.
 
-Prerequisites: Node.js `>=22.13.0`, Linux tooling with `flock`, `curl`, and GNU
-`timeout` for the provided helper scripts.
+SIWC-authenticated workspace sites may also receive
+`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
+`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
+`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
 
-```bash
-npm run install:ci
-npm run dev
+Treat the full name as optional and fall back to email when it is absent:
+
+```tsx
+import { headers } from "next/headers";
+
+export default async function Home() {
+  const requestHeaders = await headers();
+  const email = requestHeaders.get("oai-authenticated-user-email");
+  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
+  const fullName =
+    encodedFullName &&
+    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
+      "percent-encoded-utf-8"
+      ? decodeURIComponent(encodedFullName)
+      : null;
+
+  const displayName = fullName ?? email;
+  // ...
+}
 ```
 
-Useful checks:
+## Optional Dispatch-Owned ChatGPT Sign-In
 
-```bash
-npm run lint
-npm run build
-npm test
-```
+Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
+optional or required ChatGPT sign-in:
 
-`npm run dev` uses the local Vite/Vinext + Miniflare setup declared in
-`vite.config.ts`. The local binding is a placeholder; production persistence is
-provided by the Sites-injected D1 binding named `DB`.
+- Use `getChatGPTUser()` for optional signed-in UI.
+- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
+  anonymous visitors through Sign in with ChatGPT.
+- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
+  browser links or actions.
+- Pass a same-origin relative `returnTo` path for the destination after sign-in
+  or sign-out. The helper validates and safely encodes it.
+- Mark protected pages with `export const dynamic = "force-dynamic"` because
+  they depend on per-request identity headers.
 
-## Project map
+Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
+OAuth cookies, and identity header injection. Do not implement app routes for
+those reserved paths. Routes that do not import and call the helper remain
+anonymous-compatible.
 
-```text
-app/page.tsx              all client views and interaction handlers
-app/api/data/route.ts     GET/POST application API
-app/globals.css           responsive product styles
-db/schema.ts              Drizzle schema
-db/index.ts               D1 access, schema bootstrap, demo seed data
-database/schema.sql       review-friendly SQL schema mirror
-drizzle/                  generated migrations and metadata
-worker/index.ts           Cloudflare Worker entry
-vite.config.ts            Vinext/Vite/Sites local runtime configuration
-.openai/hosting.json      Sites project binding configuration
-docs/                     architecture, storage, flow, feature, and audit notes
-```
+SIWC establishes identity only; it does not prove workspace membership. Use the
+Sites hosting platform's access policy controls for workspace-wide restrictions,
+or enforce explicit server-side membership or allowlist checks.
 
-## Storage and data policy
+Use SIWC for account pages, user-specific dashboards, saved records, and write
+actions tied to the current ChatGPT user. Leave public content anonymous.
 
-The current app uses Cloudflare D1 through the `DB` binding and does not use
-browser `localStorage` or `sessionStorage` for application records. See
-[`docs/STORAGE.md`](docs/STORAGE.md) and [`docs/DATABASE.md`](docs/DATABASE.md).
+## Diagnostic Commands
 
-The production D1 rows were not exported. The public repository contains only
-the schema and demo seed definitions in `db/index.ts`. The built-in NVDA,
-Microsoft, ASML, and BYD entries, financial series, journals, snapshots,
-assumptions, evidence, tasks, events, industries, and valuations are explicitly
-`DEMO DATA` and must be replaced with primary-source research before being used
-for decisions.
+- `npm run install:ci`: perform the one bounded lockfile install
+- `npm run dev`: start the Vite/Vinext development server
+- `npm run build`: build the deployable Sites artifact
+- `npm run start`: start the built Vinext application
+- `npm test`: build and verify the rendered development-preview metadata
+- `npm run db:generate`: generate Drizzle migrations after schema changes
 
-There are no committed API keys, OAuth tokens, cookies, passwords, database
-credentials, or private account records. Use `.env.example` only as a variable
-name template; never put real values in Git.
+Use build commands for targeted diagnosis after a remote failure, not as part of the normal checkpoint path.
 
-## Review guide
+The timeout defaults can be overridden for a controlled canary with `SITES_INSTALL_TIMEOUT`, `SITES_INSTALL_KILL_AFTER`, `SITES_BUILD_TIMEOUT`, and `SITES_BUILD_KILL_AFTER`. A timeout fails the command; the helpers never retry an unchanged install or build.
 
-Recommended reading order:
+## Learn More
 
-1. `README.md`
-2. `docs/AUDIT-MANIFEST.md`
-3. `docs/ARCHITECTURE.md`
-4. `docs/STORAGE.md`
-5. `database/schema.sql`
-6. `db/schema.ts` and `db/index.ts`
-7. `app/api/data/route.ts`
-8. `app/page.tsx`
-9. `docs/LIMITATIONS.md`
-
-Start with [`docs/AUDIT-MANIFEST.md`](docs/AUDIT-MANIFEST.md) for a path-level
-map of the product and a current audit checklist.
-
-## Scope and limitations
-
-This repository is intended to make the current implementation inspectable. It
-does not add market-data providers, brokerage integrations, AI search, account
-isolation, sensitivity matrices, thesis-exposure analytics, or prediction
-calibration. Known partial and unimplemented features are recorded rather than
-hidden; see [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md).
-
-The app is a research tool and does not execute securities trades or provide
-investment advice.
+- [vinext Documentation](https://github.com/cloudflare/vinext)
+- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)

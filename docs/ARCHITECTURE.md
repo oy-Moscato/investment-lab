@@ -81,3 +81,12 @@ local development, loads Vinext, and enables the Cloudflare Vite plugin.
 ChatGPT Sites builds the pushed source with `npm run build`, then runs the
 Worker-backed artifact with the `DB` binding. Details and the production
 non-modification boundary are in `docs/DEPLOYMENT.md`.
+
+
+## P1 source-workflow overlay (commit db197e0)
+
+The P1 implementation adds a dedicated `SourceDocumentsView` in `app/source-documents-view.tsx`. It is mounted as the `sources` client view from `app/page.tsx`.
+
+The API now returns `sourceDocuments` from `GET /api/data` and dispatches source/financial actions from `POST /api/data`: `create_source_document`, `update_source_document`, `delete_source_document`, `create_financial`, `update_financial`, `delete_financial`, and `import_financial_csv`.
+
+The P1 migration is `drizzle/0003_secret_mister_fear.sql`; `db/index.ts` also performs idempotent additive column checks for older D1 databases.

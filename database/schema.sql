@@ -224,3 +224,34 @@ CREATE TABLE IF NOT EXISTS evidence (
 );
 CREATE INDEX IF NOT EXISTS evidence_company_idx ON evidence(company_id);
 CREATE INDEX IF NOT EXISTS evidence_assumption_idx ON evidence(assumption_id);
+
+
+-- P1 financial provenance additions (applied by drizzle/0003_secret_mister_fear.sql)
+-- The production bootstrap uses idempotent compatibility checks in db/index.ts.
+ALTER TABLE companies ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD';
+ALTER TABLE financials ADD COLUMN period_end TEXT NOT NULL DEFAULT '';
+ALTER TABLE financials ADD COLUMN filing_date TEXT NOT NULL DEFAULT '';
+ALTER TABLE financials ADD COLUMN currency TEXT NOT NULL DEFAULT '';
+ALTER TABLE financials ADD COLUMN unit_scale TEXT NOT NULL DEFAULT 'units';
+ALTER TABLE financials ADD COLUMN data_status TEXT NOT NULL DEFAULT 'reported';
+ALTER TABLE financials ADD COLUMN source_document_id INTEGER;
+ALTER TABLE financials ADD COLUMN audit_note TEXT NOT NULL DEFAULT '';
+
+CREATE TABLE IF NOT EXISTS source_documents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  company_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  source_type TEXT NOT NULL DEFAULT '年报',
+  source_url TEXT NOT NULL DEFAULT '',
+  filing_date TEXT NOT NULL DEFAULT '',
+  period_start TEXT NOT NULL DEFAULT '',
+  period_end TEXT NOT NULL DEFAULT '',
+  currency TEXT NOT NULL DEFAULT 'USD',
+  unit_scale TEXT NOT NULL DEFAULT 'millions',
+  note TEXT NOT NULL DEFAULT '',
+  is_sample INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS source_documents_company_date_idx ON source_documents(company_id, filing_date);
+CREATE INDEX IF NOT EXISTS financials_source_document_idx ON financials(source_document_id);

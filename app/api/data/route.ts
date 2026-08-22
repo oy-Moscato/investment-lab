@@ -11,6 +11,7 @@ import {
   investmentSnapshots,
   journal,
   screenerTemplates,
+  sourceDocuments,
   tasks,
   transactions,
   valuations,
@@ -34,11 +35,48 @@ function nullableId(value: unknown) {
   return id > 0 ? id : null;
 }
 
+function financialValues(payload: Record<string, unknown>, companyId: number) {
+  const year = integerValue(payload.year);
+  return {
+    companyId,
+    year,
+    revenue: numberValue(payload.revenue),
+    grossProfit: numberValue(payload.grossProfit),
+    operatingIncome: numberValue(payload.operatingIncome),
+    netIncome: numberValue(payload.netIncome),
+    eps: numberValue(payload.eps),
+    operatingCashFlow: numberValue(payload.operatingCashFlow),
+    capex: numberValue(payload.capex),
+    freeCashFlow: numberValue(payload.freeCashFlow),
+    cash: numberValue(payload.cash),
+    debt: numberValue(payload.debt),
+    sharesOutstanding: numberValue(payload.sharesOutstanding),
+    stockBasedCompensation: numberValue(payload.stockBasedCompensation),
+    dividend: numberValue(payload.dividend),
+    buyback: numberValue(payload.buyback),
+    roe: numberValue(payload.roe),
+    roa: numberValue(payload.roa),
+    roic: numberValue(payload.roic),
+    periodEnd: textValue(payload.periodEnd, year ? `${year}-12-31` : ""),
+    filingDate: textValue(payload.filingDate),
+    currency: textValue(payload.currency, "USD").toUpperCase(),
+    unitScale: textValue(payload.unitScale, "millions"),
+    dataStatus: textValue(payload.dataStatus, "reported"),
+    sourceDocumentId: nullableId(payload.sourceDocumentId),
+    auditNote: textValue(payload.auditNote),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function validDataStatus(value: string) {
+  return ["reported", "derived", "estimate"].includes(value);
+}
+
 export async function GET() {
   try {
     await ensureDatabase();
     const db = getDb();
-    const [companyRows, financialRows, transactionRows, taskRows, eventRows, journalRows, industryRows, valuationRows, templateRows, snapshotRows, assumptionRows, observationRows, evidenceRows] = await Promise.all([
+    const [companyRows, financialRows, transactionRows, taskRows, eventRows, journalRows, industryRows, valuationRows, templateRows, snapshotRows, assumptionRows, observationRows, evidenceRows, sourceDocumentRows] = await Promise.all([
       db.select().from(companies).orderBy(asc(companies.name)),
       db.select().from(financials).orderBy(asc(financials.companyId), asc(financials.year)),
       db.select().from(transactions).orderBy(desc(transactions.tradeDate), desc(transactions.id)),
@@ -52,8 +90,9 @@ export async function GET() {
       db.select().from(assumptions).orderBy(asc(assumptions.companyId), asc(assumptions.id)),
       db.select().from(assumptionObservations).orderBy(desc(assumptionObservations.observedDate), desc(assumptionObservations.id)),
       db.select().from(evidence).orderBy(desc(evidence.sourceDate), desc(evidence.id)),
+      db.select().from(sourceDocuments).orderBy(asc(sourceDocuments.companyId), desc(sourceDocuments.filingDate), desc(sourceDocuments.id)),
     ]);
-    return Response.json({ companies: companyRows, financials: financialRows, transactions: transactionRows, tasks: taskRows, events: eventRows, journal: journalRows, industries: industryRows, valuations: valuationRows, templates: templateRows, snapshots: snapshotRows, assumptions: assumptionRows, observations: observationRows, evidence: evidenceRows });
+    return Response.json({ companies: companyRows, financials: financialRows, transactions: transactionRows, tasks: taskRows, events: eventRows, journal: journalRows, industries: industryRows, valuations: valuationRows, templates: templateRows, snapshots: snapshotRows, assumptions: assumptionRows, observations: observationRows, evidence: evidenceRows, sourceDocuments: sourceDocumentRows });
   } catch (error) {
     const message = error instanceof Error ? error.message : "数据加载失败";
     return Response.json({ error: message }, { status: 500 });
@@ -72,7 +111,7 @@ export async function POST(request: Request) {
       const ticker = textValue(payload.ticker).toUpperCase();
       if (!name || !ticker) return Response.json({ error: "公司名称和股票代码不能为空" }, { status: 400 });
       await db.insert(companies).values({
-        name, ticker, market: textValue(payload.market, "未设置"), country: textValue(payload.country, "未设置"), industry: textValue(payload.industry, "未分类"), status: textValue(payload.status, "发现"), price: numberValue(payload.price), fairValue: numberValue(payload.fairValue), conviction: integerValue(payload.conviction), lastResearchDate: textValue(payload.lastResearchDate), businessModel: textValue(payload.businessModel), isSample: 0,
+        name, ticker, market: textValue(payload.market, "未设置"), currency: textValue(payload.currency, "USD").toUpperCase(), country: textValue(payload.country, "未设置"), industry: textValue(payload.industry, "未分类"), status: textValue(payload.status, "发现"), price: numberValue(payload.price), fairValue: numberValue(payload.fairValue), conviction: integerValue(payload.conviction), lastResearchDate: textValue(payload.lastResearchDate), businessModel: textValue(payload.businessModel), isSample: 0,
       }).run();
     } else if (action === "update_company") {
       const id = integerValue(payload.id);
@@ -108,7 +147,7 @@ export async function POST(request: Request) {
         }).run();
       }
       await db.update(companies).set({
-        name: textValue(payload.name), ticker: textValue(payload.ticker).toUpperCase(), market: textValue(payload.market), country: textValue(payload.country), industry: textValue(payload.industry), status: textValue(payload.status), price: numberValue(payload.price), marketCap: numberValue(payload.marketCap), enterpriseValue: numberValue(payload.enterpriseValue), fairValue: numberValue(payload.fairValue), conviction: integerValue(payload.conviction), lastResearchDate: textValue(payload.lastResearchDate), businessModel: textValue(payload.businessModel), moatScore: integerValue(payload.moatScore), moatEvidence: textValue(payload.moatEvidence, "[]"), managementName: textValue(payload.managementName), managementScore: integerValue(payload.managementScore), managementNotes: textValue(payload.managementNotes), thesisBull: textValue(payload.thesisBull), thesisBear: textValue(payload.thesisBear), keyAssumptions: textValue(payload.keyAssumptions), killCriteria: textValue(payload.killCriteria), updatedAt: new Date().toISOString(),
+        name: textValue(payload.name), ticker: textValue(payload.ticker).toUpperCase(), market: textValue(payload.market), currency: textValue(payload.currency, "USD").toUpperCase(), country: textValue(payload.country), industry: textValue(payload.industry), status: textValue(payload.status), price: numberValue(payload.price), marketCap: numberValue(payload.marketCap), enterpriseValue: numberValue(payload.enterpriseValue), fairValue: numberValue(payload.fairValue), conviction: integerValue(payload.conviction), lastResearchDate: textValue(payload.lastResearchDate), businessModel: textValue(payload.businessModel), moatScore: integerValue(payload.moatScore), moatEvidence: textValue(payload.moatEvidence, "[]"), managementName: textValue(payload.managementName), managementScore: integerValue(payload.managementScore), managementNotes: textValue(payload.managementNotes), thesisBull: textValue(payload.thesisBull), thesisBear: textValue(payload.thesisBear), keyAssumptions: textValue(payload.keyAssumptions), killCriteria: textValue(payload.killCriteria), updatedAt: new Date().toISOString(),
       }).where(eq(companies.id, id)).run();
     } else if (action === "create_task") {
       const title = textValue(payload.title);
@@ -177,6 +216,98 @@ export async function POST(request: Request) {
       const claim = textValue(payload.claim);
       if (!companyId || !claim) return Response.json({ error: "证据必须关联公司并填写 Claim" }, { status: 400 });
       await db.insert(evidence).values({ companyId, assumptionId: nullableId(payload.assumptionId), claim, polarity: textValue(payload.polarity, "support"), sourceType: textValue(payload.sourceType, "笔记"), sourceTitle: textValue(payload.sourceTitle), sourceUrl: textValue(payload.sourceUrl), sourceDate: textValue(payload.sourceDate, new Date().toISOString().slice(0, 10)), note: textValue(payload.note), conclusion: textValue(payload.conclusion) }).run();
+    } else if (action === "create_source_document") {
+      const companyId = integerValue(payload.companyId);
+      const title = textValue(payload.title);
+      const company = await db.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).limit(1);
+      if (!company[0] || !title) return Response.json({ error: "来源必须关联有效公司并填写标题" }, { status: 400 });
+      await db.insert(sourceDocuments).values({
+        companyId,
+        title,
+        sourceType: textValue(payload.sourceType, "年报"),
+        sourceUrl: textValue(payload.sourceUrl),
+        filingDate: textValue(payload.filingDate),
+        periodStart: textValue(payload.periodStart),
+        periodEnd: textValue(payload.periodEnd),
+        currency: textValue(payload.currency, "USD").toUpperCase(),
+        unitScale: textValue(payload.unitScale, "millions"),
+        note: textValue(payload.note),
+        isSample: 0,
+      }).run();
+    } else if (action === "update_source_document") {
+      const id = integerValue(payload.id);
+      const companyId = integerValue(payload.companyId);
+      const title = textValue(payload.title);
+      if (!id || !companyId || !title) return Response.json({ error: "来源编辑信息不完整" }, { status: 400 });
+      await db.update(sourceDocuments).set({ title, sourceType: textValue(payload.sourceType, "年报"), sourceUrl: textValue(payload.sourceUrl), filingDate: textValue(payload.filingDate), periodStart: textValue(payload.periodStart), periodEnd: textValue(payload.periodEnd), currency: textValue(payload.currency, "USD").toUpperCase(), unitScale: textValue(payload.unitScale, "millions"), note: textValue(payload.note), updatedAt: new Date().toISOString() }).where(and(eq(sourceDocuments.id, id), eq(sourceDocuments.companyId, companyId))).run();
+    } else if (action === "delete_source_document") {
+      const id = integerValue(payload.id);
+      if (!id) return Response.json({ error: "来源 ID 无效" }, { status: 400 });
+      const bound = await db.select({ id: financials.id }).from(financials).where(eq(financials.sourceDocumentId, id)).limit(1);
+      if (bound[0]) return Response.json({ error: "该来源仍绑定财务年度，请先解绑后再删除" }, { status: 409 });
+      await db.delete(sourceDocuments).where(eq(sourceDocuments.id, id)).run();
+    } else if (action === "create_financial") {
+      const companyId = integerValue(payload.companyId);
+      const year = integerValue(payload.year);
+      const company = await db.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).limit(1);
+      if (!company[0] || !year) return Response.json({ error: "财务年度必须关联有效公司" }, { status: 400 });
+      const existing = await db.select({ id: financials.id }).from(financials).where(and(eq(financials.companyId, companyId), eq(financials.year, year))).limit(1);
+      if (existing[0]) return Response.json({ error: "该公司年度已存在，请使用编辑或明确的 CSV 更新模式" }, { status: 409 });
+      const values = financialValues(payload, companyId);
+      if (!validDataStatus(values.dataStatus)) return Response.json({ error: "dataStatus 必须是 reported、derived 或 estimate" }, { status: 400 });
+      if (values.sourceDocumentId) {
+        const source = await db.select({ companyId: sourceDocuments.companyId }).from(sourceDocuments).where(eq(sourceDocuments.id, values.sourceDocumentId)).limit(1);
+        if (!source[0] || source[0].companyId !== companyId) return Response.json({ error: "来源文档不属于该公司" }, { status: 400 });
+      }
+      await db.insert(financials).values(values).run();
+    } else if (action === "update_financial") {
+      const id = integerValue(payload.id);
+      const companyId = integerValue(payload.companyId);
+      const year = integerValue(payload.year);
+      if (!id || !companyId || !year) return Response.json({ error: "财务编辑信息不完整" }, { status: 400 });
+      const duplicate = await db.select({ id: financials.id }).from(financials).where(and(eq(financials.companyId, companyId), eq(financials.year, year))).limit(2);
+      if (duplicate.some((row) => row.id !== id)) return Response.json({ error: "该公司年度已存在另一条财务记录" }, { status: 409 });
+      const values = financialValues(payload, companyId);
+      if (!validDataStatus(values.dataStatus)) return Response.json({ error: "dataStatus 必须是 reported、derived 或 estimate" }, { status: 400 });
+      if (values.sourceDocumentId) {
+        const source = await db.select({ companyId: sourceDocuments.companyId }).from(sourceDocuments).where(eq(sourceDocuments.id, values.sourceDocumentId)).limit(1);
+        if (!source[0] || source[0].companyId !== companyId) return Response.json({ error: "来源文档不属于该公司" }, { status: 400 });
+      }
+      await db.update(financials).set(values).where(eq(financials.id, id)).run();
+    } else if (action === "delete_financial") {
+      const id = integerValue(payload.id);
+      if (!id) return Response.json({ error: "财务记录 ID 无效" }, { status: 400 });
+      await db.delete(financials).where(eq(financials.id, id)).run();
+    } else if (action === "import_financial_csv") {
+      const rows = (Array.isArray(payload.rows) ? payload.rows : []) as Array<Record<string, unknown>>;
+      const mode = textValue(payload.mode, "insert");
+      if (!rows.length) return Response.json({ error: "没有可导入的 CSV 行" }, { status: 400 });
+      if (!["insert", "upsert"].includes(mode)) return Response.json({ error: "导入模式必须明确选择 insert 或 upsert" }, { status: 400 });
+      const prepared: Array<{ values: ReturnType<typeof financialValues>; rowNumber: number }> = [];
+      const conflicts: number[] = [];
+      for (const [index, row] of rows.entries()) {
+        const ticker = textValue(row.ticker || row.symbol).toUpperCase();
+        const requestedCompanyId = integerValue(row.companyId || payload.companyId);
+        const company = requestedCompanyId
+          ? await db.select({ id: companies.id }).from(companies).where(eq(companies.id, requestedCompanyId)).limit(1)
+          : await db.select({ id: companies.id }).from(companies).where(eq(companies.ticker, ticker)).limit(1);
+        const companyId = company[0]?.id ?? 0;
+        const values = financialValues(row, companyId);
+        if (!companyId || !values.year || !validDataStatus(values.dataStatus)) return Response.json({ error: `CSV 第 ${index + 2} 行缺少有效公司、年度或 dataStatus` }, { status: 400 });
+        if (values.sourceDocumentId) {
+          const source = await db.select({ companyId: sourceDocuments.companyId }).from(sourceDocuments).where(eq(sourceDocuments.id, values.sourceDocumentId)).limit(1);
+          if (!source[0] || source[0].companyId !== companyId) return Response.json({ error: `CSV 第 ${index + 2} 行的来源不属于该公司` }, { status: 400 });
+        }
+        const existing = await db.select({ id: financials.id }).from(financials).where(and(eq(financials.companyId, companyId), eq(financials.year, values.year))).limit(1);
+        if (existing[0]) conflicts.push(index + 2);
+        prepared.push({ values, rowNumber: index + 2 });
+      }
+      if (conflicts.length && mode === "insert") return Response.json({ error: "导入中包含已存在年度；选择‘明确更新’后才会覆盖", conflicts }, { status: 409 });
+      for (const item of prepared) {
+        const existing = await db.select({ id: financials.id }).from(financials).where(and(eq(financials.companyId, item.values.companyId), eq(financials.year, item.values.year))).limit(1);
+        if (existing[0]) await db.update(financials).set(item.values).where(eq(financials.id, existing[0].id)).run();
+        else await db.insert(financials).values(item.values).run();
+      }
     } else if (action === "create_transaction") {
       const companyId = integerValue(payload.companyId);
       const shares = numberValue(payload.shares);
