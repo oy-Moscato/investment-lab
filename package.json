@@ -10,9 +10,12 @@
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
     "build": "bash scripts/build-verified.sh",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
+    "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test:behavior": "node --test tests/data-behavior.test.mjs tests/financial-correctness.test.mjs tests/persistence.test.mjs tests/source-workflow.test.mjs",
+    "db:preview": "node scripts/prepare-preview.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
