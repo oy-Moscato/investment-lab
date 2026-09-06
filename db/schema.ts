@@ -21,6 +21,7 @@ export const companies = sqliteTable(
     ticker: text("ticker").notNull(),
     market: text("market").notNull().default(""),
     currency: text("currency").notNull().default("USD"),
+    currencyVerified: integer("currency_verified").notNull().default(0),
     country: text("country").notNull().default(""),
     industry: text("industry").notNull().default(""),
     status: text("status").notNull().default("发现"),
@@ -82,6 +83,7 @@ export const financials = sqliteTable(
     dataStatus: text("data_status").notNull().default("reported"),
     sourceDocumentId: integer("source_document_id"),
     auditNote: text("audit_note").notNull().default(""),
+    basisConfirmed: integer("basis_confirmed").notNull().default(0),
     ...timestamps,
   },
   (table) => ({
@@ -129,6 +131,10 @@ export const transactions = sqliteTable(
     shares: real("shares").notNull(),
     price: real("price").notNull(),
     fees: real("fees").notNull().default(0),
+    currency: text("currency").notNull().default(""),
+    fxRateToBase: real("fx_rate_to_base"),
+    fxBaseCurrency: text("fx_base_currency").notNull().default(""),
+    reversalOfTransactionId: integer("reversal_of_transaction_id"),
     note: text("note").notNull().default(""),
     ...timestamps,
   },
@@ -335,3 +341,9 @@ export const evidence = sqliteTable(
     assumptionIdx: index("evidence_assumption_idx").on(table.assumptionId),
   }),
 );
+
+export const appSettings = sqliteTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});

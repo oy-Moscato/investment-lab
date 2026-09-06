@@ -1,3 +1,5 @@
+> Historical P1-only handoff. Current integrated state and validation are in RESTART-REVIEW.md.
+
 # Work Implementation P1-3
 
 ## Scope

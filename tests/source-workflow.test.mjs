@@ -25,7 +25,7 @@ test("financial CSV parser rejects missing identity, year, and invalid status", 
 
 test("source workflow has additive schema, CRUD actions, and explicit import overwrite mode", () => {
   const schema = read("db/schema.ts");
-  const route = read("app/api/data/route.ts");
+  const route = read("server/data-service.ts");
   const migration = read("drizzle/0003_secret_mister_fear.sql");
   assert.match(schema, /sourceDocuments = sqliteTable/);
   assert.match(schema, /sourceDocumentId: integer\("source_document_id"\)/);
@@ -40,4 +40,16 @@ test("source workflow has additive schema, CRUD actions, and explicit import ove
   assert.match(route, /status: 409/);
   assert.match(migration, /CREATE TABLE `source_documents`/);
   assert.match(migration, /ALTER TABLE `financials` ADD `source_document_id`/);
+});
+
+test('CSV invalid numbers, unclosed quotes and duplicate headers are rejected', () => {
+  for (const text of ['ticker,year,revenue\nTEST,2025,nonsense', 'ticker,year\n"TEST,2025', 'ticker,year,year\nTEST,2025,2026']) {
+    assert.ok(parseFinancialCsv(text).errors.length > 0);
+  }
+});
+
+test('absent financial columns remain absent for partial explicit updates', () => {
+  const parsed = parseFinancialCsv('ticker,year,revenue\nTEST,2025,100');
+  assert.equal(parsed.rows[0].revenue, 100);
+  assert.equal(Object.hasOwn(parsed.rows[0], 'debt'), false);
 });

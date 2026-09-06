@@ -1,0 +1,1 @@
+ALTER TABLE `transactions` ADD `fx_base_currency` text DEFAULT '' NOT NULL;
